@@ -1,0 +1,11 @@
+[Unit]
+Description=PiCar 4WD HAT Reset
+Before=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/bin/picar-hat-reset.py
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
