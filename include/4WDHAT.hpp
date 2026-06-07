@@ -16,7 +16,7 @@ namespace PiCar_4WD
   
 {
    
-    class PiCar4WDHAT : public Device
+    class PiCar4WDHAT : public i2cpp::Device
     {
         private:
             static constexpr int REG_CHN = 0x20;
