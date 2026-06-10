@@ -4,7 +4,57 @@
 #include <algorithm>
 
 namespace PiCar_4WD{
-    PiCar4WDHAT::PiCar4WDHAT(int bus, uint_fast8_t address, uint8_t channel) : Device(bus, address), channel_(channel) { }
+
+    PiCar4WDHAT::PiCar4WDHAT(int bus, uint_fast8_t address, uint8_t channel) : Device(bus, address), channel_(channel), timer_(channel / 4) { }
+
+    void PiCar4WDHAT::set_duty_cycle(float duty_cycle) {
+        
+    }
+
+    void PiCar4WDHAT::set_prescaler(uint8_t prescaler) {
+        if (!prescaler) {
+            prescaler = 1;
+        }
+
+        uint8_t reg = static_cast<uint8_t>(REG_PSC + timer_);
+        
+        uint_fast8_t buffer[3] = {
+            reg,
+            static_cast<uint_fast8_t>(prescaler >> 8),
+            static_cast<uint_fast8_t>(prescaler & 0xff)
+        };
+        this->write_i2c(buffer, 3);
+
+    }
+
+    void PiCar4WDHAT::set_period(uint16_t period) {
+        if (!period) {
+            period = 999;
+        }
+        period_ = period;
+
+        uint8_t reg = static_cast<uint8_t>(REG_ARR + timer_);
+        uint_fast8_t buffer[3] = {
+            reg,
+            static_cast<uint_fast8_t>(period >> 8),
+            static_cast<uint_fast8_t>(period & 0xff)
+        };
+        this->write_i2c(buffer, 3);
+    
+    }
+
+    void PiCar4WDHAT::set_pulse_width(uint16_t pulse_width){
+        if (!pulse_width){
+            pulse_width = 0;
+        }
+        uint8_t reg = static_cast<uint8_t>(REG_CHN + channel_);
+                uint_fast8_t buffer[3] = {
+            reg,
+            static_cast<uint_fast8_t>(pulse_width >> 8),
+            static_cast<uint_fast8_t>(pulse_width & 0xff)
+        };
+        this->write_i2c(buffer, 3);
+    }
 
     /**
      * If CLOCK / frequency were always a perfect square 

@@ -8,7 +8,6 @@
 #include <cstdint>
 #include <memory>
 
-#include "libs/I2CPP/include/i2cpp/i2cpp.hpp"
 #include "libs/I2CPP/include/i2cpp/device.hpp"
 
 namespace PiCar_4WD
@@ -25,6 +24,9 @@ namespace PiCar_4WD
             static constexpr int REG_ARR = 0x44;
             static constexpr int CLOCK = 72000000;
             uint8_t channel_;
+            uint16_t timer_;
+            uint16_t period_ = 0;
+
             
             /**
              * Set a prescaler for the internal clock
