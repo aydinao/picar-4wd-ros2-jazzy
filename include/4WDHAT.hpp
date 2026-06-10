@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <memory>
 
-#include "libs/I2CPP/include/i2cpp/device.hpp"
+#include "i2cpp/device.hpp"
 
 namespace PiCar_4WD
 
@@ -32,7 +32,7 @@ namespace PiCar_4WD
              * Set a prescaler for the internal clock
              * @param prescaler prescaler value (e.g. 1, 8, 256)
              */
-            void set_prescaler(uint8_t prescaler);
+            void set_prescaler(uint16_t prescaler);
 
             /** 
              * Set a time period.
