@@ -1,4 +1,4 @@
-#include "include/4WDHAT.hpp"
+#include "4WDHAT.hpp"
 #include <cmath>
 #include <vector>
 #include <algorithm>
@@ -8,14 +8,19 @@ namespace PiCar_4WD{
     PiCar4WDHAT::PiCar4WDHAT(int bus, uint_fast8_t address, uint8_t channel) : Device(bus, address), channel_(channel), timer_(channel / 4) { }
 
     void PiCar4WDHAT::set_duty_cycle(float duty_cycle) {
-        
+        // duty_cycle expected as 0.0–100.0
+        if (duty_cycle < 0.0f) duty_cycle = 0.0f;
+        if (duty_cycle > 100.0f) duty_cycle = 100.0f;
+        float fraction = duty_cycle / 100.0f;
+        auto pw = static_cast<uint16_t>(fraction * static_cast<float>(period_));
+        set_pulse_width(pw);
     }
 
-    void PiCar4WDHAT::set_prescaler(uint8_t prescaler) {
+    void PiCar4WDHAT::set_prescaler(uint16_t prescaler) {
         if (!prescaler) {
             prescaler = 1;
         }
-
+        prescaler = prescaler - 1;          
         uint8_t reg = static_cast<uint8_t>(REG_PSC + timer_);
         
         uint_fast8_t buffer[3] = {
@@ -31,13 +36,13 @@ namespace PiCar_4WD{
         if (!period) {
             period = 999;
         }
-        period_ = period;
+        period_ = static_cast<uint16_t>(period - 1);;
 
         uint8_t reg = static_cast<uint8_t>(REG_ARR + timer_);
         uint_fast8_t buffer[3] = {
             reg,
-            static_cast<uint_fast8_t>(period >> 8),
-            static_cast<uint_fast8_t>(period & 0xff)
+            static_cast<uint_fast8_t>(period_ >> 8),
+            static_cast<uint_fast8_t>(period_ & 0xff)
         };
         this->write_i2c(buffer, 3);
     
@@ -98,7 +103,7 @@ namespace PiCar_4WD{
         int prescaler = candidates[index].first;
         int period = candidates[index].second;
 
-        set_prescaler(static_cast<uint8_t>(prescaler));
+        set_prescaler(static_cast<uint16_t>(prescaler));
         set_period(static_cast<uint16_t>(period));
 
     }
