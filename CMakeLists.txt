@@ -9,7 +9,7 @@ add_subdirectory(libs/I2CPP)
 
 add_executable(picar_test
     src/main.cpp
-    src/device/4wdhat.cpp
+    src/device/4WDHAT.cpp
 )
 
 target_include_directories(picar_test PRIVATE
