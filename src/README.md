@@ -1,34 +1,198 @@
-## C++ Driver
+# C++ Driver for the SunFounder PiCar-4WD HAT
 
-With the HAT reliably reachable at `0x14` on every boot, the Python library is being replaced with a native C++ driver. The Python source served as the reference — the register map, timing calculations, and channel addressing were read from it directly rather than from any schematic (none exists publicly for this board).
+Native C++ replacement for SunFounder's Python `picar-4wd` library, targeting the same
+`4WD-HAT` board. The Python source is the only documentation that exists for this
+hardware — the register map, timing calculations, and channel addressing here were read
+from it directly. There is no public schematic.
+
+This document covers building, using, and extending the C++ driver. For HAT bring-up
+(getting `0x14` to appear on the bus in the first place), see the root README.
+
+---
+
+## Prerequisites
+
+The HAT must already be reachable at `0x14` before using. If `i2cdetect -y 1`
+does not show `14` in the grid, fix that first — see the root README, section "The actual
+blocker: the MCU is held in reset".
+
+Build dependencies (Ubuntu 24.04 on Pi):
+
+```bash
+sudo apt install -y build-essential cmake git i2c-tools
+```
+
+Runtime: your user must be in the `i2c` group, otherwise every run needs `sudo`:
+
+```bash
+sudo usermod -aG i2c $USER
+# log out and back in
+```
+
+---
+
+## Repo layout
+
+```
+picar-4wd-ros2-jazzy/
+├── CMakeLists.txt
+├── include/
+│   └── 4WDHAT.hpp           // public driver header
+├── src/
+│   ├── main.cpp             // test harness
+│   └── device/
+│       └── 4wdhat.cpp       // driver implementation
+└── libs/
+    └── I2CPP/               // vendored I2C library (see Dependencies)
+```
+
+Include paths are set by CMake — source files reference headers as `"4WDHAT.hpp"` and
+`"i2cpp/device.hpp"`, **not** `"include/4WDHAT.hpp"` or
+`"libs/I2CPP/include/i2cpp/device.hpp"`. Don't bake directory structure into source.
+
+---
+
+## Dependencies
+
+[`I2CPP`](https://github.com/mwaverecycling/I2CPP) — a thin C++ wrapper over Linux's
+`/dev/i2c-*` interface. Vendored as a subdirectory rather than installed system-wide so
+the build is self-contained.
+
+```bash
+git clone https://github.com/mwaverecycling/I2CPP.git libs/I2CPP
+```
+
+`PiCar4WDHAT` inherits from `i2cpp::Device`, which provides protected `read_i2c()` and
+`write_i2c()` helpers that wrap the bus file descriptor and device address. The driver
+never touches `ioctl` directly.
+
+---
+
+## Building
+
+```bash
+mkdir -p build && cd build
+cmake ..
+make -j4
+./picar_test
+```
+
+Re-run `cmake ..` only when `CMakeLists.txt` changes. Everyday edits to `.cpp`/`.hpp`
+files just need `make`.
+
+---
+
+## Quick start
+
+After running the executable the PiCar wheel should start spinning. Executing the programme while the wheel is spinning will result in the wheel spinning forever. This is a limitation of the test main.cpp currently. Exit the programme when it is not moving. 
+
+---
+
+## API
+
+All members live in namespace `PiCar_4WD`.
+
+### Construction
+
+```cpp
+PiCar4WDHAT(int bus, uint_fast8_t address, uint8_t channel);
+```
+
+| Param     | Typical value | Meaning                                             |
+|-----------|---------------|-----------------------------------------------------|
+| `bus`     | `1`           | I2C adapter number (`/dev/i2c-1` on the Pi header)  |
+| `address` | `0x14`        | MCU address. Some board revisions sit at `0x15`     |
+| `channel` | `0`–`13`      | PWM channel (`P0`–`P13` in the SunFounder docs)     |
+
+Unlike the Python `PWM.__init__`, the C++ constructor does **not** auto-probe `0x14`
+then `0x15`, and does **not** implicitly call `set_frequency(50)`. Callers do both
+explicitly.
+
+### Public methods
+
+| Method                                  | Effect                                            |
+|-----------------------------------------|---------------------------------------------------|
+| `set_frequency(uint16_t hz)`            | Compute and write best (prescaler, period) pair   |
+| `set_pulse_width(uint16_t value)`       | Set raw on-time count on this channel             |
+| `set_duty_cycle(float percent)`         | Set on-time as 0.0–100.0 % of cached period       |
+
+## Implementation notes
 
 ### Register map
 
 Recovered from `picar_4wd` library source:
 
-| Constant | Address | Purpose |
-|----------|---------|---------|
-| `REG_CHN` | `0x20` | Channel select |
-| `REG_FRE` | `0x30` | Frequency |
-| `REG_PSC` | `0x40` | Prescaler (timer clock divider) |
-| `REG_ARR` | `0x44` | Auto-reload register (period) |
+| Constant  | Address | Purpose                              |
+|-----------|---------|--------------------------------------|
+| `REG_CHN` | `0x20`  | Channel select (per-channel pulse)   |
+| `REG_FRE` | `0x30`  | Frequency                            |
+| `REG_PSC` | `0x40`  | Prescaler (timer clock divider)      |
+| `REG_ARR` | `0x44`  | Auto-reload register (period)        |
 
-The MCU internal clock is 72 MHz.
+MCU clock is 72 MHz. Each timer covers 4 channels, so `timer = channel / 4` and the
+register offset is `REG_PSC + timer` for the prescaler, `REG_ARR + timer` for the
+period.
+
+All register writes are three bytes: `[reg, value_high, value_low]` — **big-endian**.
 
 ### PWM frequency calculation
 
-PWM frequency is set by finding an integer prescaler/period pair whose product best approximates `CLOCK / frequency`. Because `CLOCK / frequency` is rarely a perfect square, a brute-force search over ten prescaler candidates centred on `sqrt(CLOCK / frequency)` finds the pair with minimum frequency error.
+PWM frequency is set by finding an integer prescaler/period pair whose product best
+approximates `CLOCK / frequency`. Because `CLOCK / frequency` is rarely a perfect
+square, a brute-force search over ten prescaler candidates centred on
+`sqrt(CLOCK / frequency)` finds the pair with minimum frequency error.
 
-### Structure
+### Python parity: the `-1` adjustment
 
-`PiCar4WDHAT` inherits from a thin `Device` base class wrapping Linux I2C file descriptor operations. It lives in the `PiCar_4WD` namespace.
+The Python library stores prescaler and period as `n - 1` before writing to the bus,
+to match the underlying MCU timer convention (the registers count from 0). The C++
+driver mirrors this:
 
-### Current state
+```cpp
+prescaler = prescaler - 1;   // written to REG_PSC
+period_ = period - 1;        // cached and written to REG_ARR
+```
 
-| Method | Status |
-|--------|--------|
-| `set_frequency` | ✅ Implemented |
-| `set_prescaler` | 🔲 Pending |
-| `set_period` | 🔲 Pending |
-| `set_pulse_width` | 🔲 Pending |
-| `set_duty_cycle` | 🔲 Pending |
+`set_duty_cycle` multiplies the cached `period_` (the corrected value) by the duty
+fraction. If you bypass `set_period` and write `REG_ARR` by hand, `set_duty_cycle`
+will be off-by-one until you do.
+
+---
+
+## Troubleshooting
+
+| Symptom                                          | Likely cause                                                |
+|--------------------------------------------------|-------------------------------------------------------------|
+| `fatal error: 4WDHAT.hpp: No such file...`       | Include paths not set — check `target_include_directories` |
+| `fatal error: include/4WDHAT.hpp: No such file`  | Source still has `"include/..."` prefix — drop it          |
+| `Permission denied` opening `/dev/i2c-1`         | User not in `i2c` group, or didn't re-login after `usermod` |
+| `i2cdetect` shows nothing at `0x14`              | MCU in reset — see root README, not a driver issue          |
+| Motor spins forever after Ctrl+C                 | Missing signal handler / destructor not running             |
+| Motor spins but ignores direction                | Direction GPIO not driven — PWM alone doesn't pick direction |
+| `OSError: Remote I/O error` (when run via Python sanity check) | HAT not on battery — Pi-only power is insufficient for motor commands |
+| Frequency seems wildly wrong                      | Prescaler truncation — confirm prescaler param is `uint16_t` |
+
+---
+
+## Known limitations
+
+- **No motor-direction handling.** The driver only outputs PWM. Drive motors need a
+  matching direction GPIO line set on the Pi for controlled rotation; that lives in
+  the (yet-to-be-written) motor wrapper above this driver, not here.
+- **No address auto-probe.** Construction takes the address as a parameter. If your
+  board sits at `0x15` instead of `0x14`, pass `0x15`.
+- **No `SIGKILL` safety.** Nothing catches `kill -9`; the wheel will keep spinning.
+  A hardware watchdog or MCU-side timeout would be needed for true fail-safe operation.
+- **No thread safety.** Single-threaded use only. Concurrent calls from multiple
+  threads will corrupt the bus state in `i2cpp::Device`.
+
+---
+
+## Roadmap
+
+- [ ] Motor wrapper class — combines PWM channel + direction GPIO into one `Motor`.
+- [ ] Servo wrapper class — angle in degrees → pulse width, with calibration.
+- [ ] ADC read support — the same MCU at `0x14` also exposes the battery voltage and
+  line-follower readings.
+- [ ] ROS 2 Jazzy node — `cmd_vel` subscriber → per-wheel speed → driver calls.
+- [ ] Optional: address auto-probe (`0x14` then `0x15`) matching the Python init.
