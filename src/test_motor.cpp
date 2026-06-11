@@ -24,6 +24,16 @@ int main() {
     PiCar_4WD::Motor right_rear(pwm_right_rear_obj, right_rear_gpio);
 
     left_front.set_power(60);
+    right_front.set_power(60);
+    left_rear.set_power(60);
+    right_rear.set_power(60);
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+
+    left_front.set_power(0);
+    right_front.set_power(0);
+    left_rear.set_power(0);
+    right_rear.set_power(0);
+
 
 
 }
