@@ -20,8 +20,9 @@ int main() {
 
     PiCar_4WD::Motor left_front(pwm_left_front_obj, left_front_gpio);
     PiCar_4WD::Motor right_front(pwm_right_front_obj, right_front_gpio);
-    PiCar_4WD::Motor left_rear(pwm_left_rear_obj, left_rear_gpio);
-    PiCar_4WD::Motor right_rear(pwm_right_rear_obj, right_rear_gpio);
+    PiCar_4WD::Motor left_rear(pwm_left_rear_obj, left_rear_gpio, true);
+    PiCar_4WD::Motor right_rear(pwm_right_rear_obj, right_rear_gpio, true);
+    
     
     pwm_left_front_obj.set_frequency(50);
     pwm_right_front_obj.set_frequency(50);
