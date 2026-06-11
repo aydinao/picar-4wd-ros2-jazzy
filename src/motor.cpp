@@ -30,6 +30,7 @@ namespace PiCar_4WD {
     }
 
     Motor::~Motor() {
+        pwm_pin_.set_duty_cycle(0.0f);
         if (dir_line_) gpiod_line_release(dir_line_);
         if (chip_) gpiod_chip_close(chip_);
     }
