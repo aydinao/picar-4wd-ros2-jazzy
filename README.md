@@ -267,6 +267,50 @@ i2cdetect -y 1
 
 ---
 
+## C++ driver layer
+
+A native C++ hardware abstraction lives in `src/` and `include/`, targeting the HAT without the Python dependency:
+
+| File | Role |
+|------|------|
+| `include/4WDHAT.hpp` / `src/device/4WDHAT.cpp` | PWM driver — wraps the HAT's I2C registers |
+| `include/motor.hpp` / `src/motor.cpp` | Motor controller — maps power (−100…100) to PWM duty cycle + GPIO direction pin |
+
+### How the pin assignments were determined
+
+SunFounder's Python motor init is the source of truth:
+
+```python
+left_front  = Motor(PWM("P13"), Pin("D4"))
+right_front = Motor(PWM("P12"), Pin("D5"))
+left_rear   = Motor(PWM("P8"),  Pin("D11"))
+right_rear  = Motor(PWM("P9"),  Pin("D15"))
+```
+
+The PWM channel number is the integer in the `P` name (e.g. `P13` → channel `13`).  
+The `D`-pin names are resolved to BCM GPIO numbers via `picar_4wd/pin.py`:
+
+```python
+"D4": 23, "D5": 24, "D11": 13, "D15": 20
+```
+
+The I2C address `0x14` was confirmed in §4. This gives the C++ constructor arguments directly:
+
+```cpp
+PiCar4WDHAT(/*bus*/ 1, /*addr*/ 0x14, /*channel*/ 13);  // left front PWM
+Motor(pwm_obj, /*dir_pin BCM*/ 23);                      // left front direction
+```
+
+Dependencies: [`I2CPP`](libs/I2CPP/) (vendored), `libgpiod` (`sudo apt install libgpiod-dev`).
+
+Build a specific target:
+```bash
+cmake -B build && cmake --build build --target test_motor
+sudo ./build/test_motor
+```
+
+---
+
 ## Open items / next steps
 
 - Confirm `picar-4wd test motor` runs end-to-end now that the MCU is reachable.
@@ -274,3 +318,6 @@ i2cdetect -y 1
 - Wrap the hardware layer in a thin ROS 2 node (`cmd_vel` → wheel speeds) once bring-up is stable.
 - The HAT must be battery-powered; running the Pi from external supply only will produce
   `OSError: [Errno 121] Remote I/O error` on motor commands.
+
+
+  
