@@ -4,9 +4,9 @@
 #include <memory>
 #include <gpiod.h>
 
-#include "4WDHAT.hpp"
+#include "picar_4wd_hardware/hat.hpp"
 
-namespace PiCar_4WD
+namespace picar_4wd_hardware
 {
 
     class Motor
@@ -19,8 +19,13 @@ namespace PiCar_4WD
             bool is_reversed_;
             int8_t power_ = 0;
             uint8_t except_power_ = 0;
-            struct gpiod_chip *chip_;
-            struct gpiod_line *dir_line_;
+
+            // libgpiod v2: a chip handle plus a *line request*. In v1 you held a
+            // `gpiod_line*` obtained from the chip; in v2 you request one or more
+            // line offsets together and get back a single request handle that owns
+            // them. Values are then set by (request, offset) rather than by line.
+            struct gpiod_chip *chip_ = nullptr;
+            struct gpiod_line_request *dir_request_ = nullptr;
 
         public:
             using SharedPtr = std::shared_ptr<Motor>;
@@ -28,5 +33,8 @@ namespace PiCar_4WD
             ~Motor();
 
             void set_power(int8_t power);
+
+            /// True if the direction line was successfully claimed.
+            bool ok() const { return dir_request_ != nullptr; }
     };
 }

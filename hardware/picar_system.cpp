@@ -8,13 +8,14 @@ namespace picar_4wd_hardware
 {
 
 hardware_interface::CallbackReturn PiCarSystemHardware::on_init(
-    const hardware_interface::HardwareInfo & info)
+    const hardware_interface::HardwareComponentInterfaceParams & params)
 {
-    if (SystemInterface::on_init(info) != hardware_interface::CallbackReturn::SUCCESS) {
+    if (SystemInterface::on_init(params) != hardware_interface::CallbackReturn::SUCCESS) {
         return hardware_interface::CallbackReturn::ERROR;
     }
     // TODO(you): read params from info_.hardware_parameters and info_.joints.
-    // NO hardware access here.
+    // The base call above has already populated info_ and created the state and
+    // command interfaces declared in the URDF. NO hardware access here.
     return hardware_interface::CallbackReturn::SUCCESS;
 }
 
@@ -29,7 +30,7 @@ hardware_interface::CallbackReturn PiCarSystemHardware::on_configure(
 hardware_interface::CallbackReturn PiCarSystemHardware::on_activate(
     const rclcpp_lifecycle::State & /*previous_state*/)
 {
-    // TODO(you): zero every motor, zero the state/command vectors.
+    // TODO(you): zero every motor and every state/command interface.
     return hardware_interface::CallbackReturn::SUCCESS;
 }
 
@@ -40,28 +41,13 @@ hardware_interface::CallbackReturn PiCarSystemHardware::on_deactivate(
     return hardware_interface::CallbackReturn::SUCCESS;
 }
 
-std::vector<hardware_interface::StateInterface>
-PiCarSystemHardware::export_state_interfaces()
-{
-    std::vector<hardware_interface::StateInterface> state_interfaces;
-    // TODO(you): one entry per (joint, interface) pair you claim to provide.
-    // You have TWO encoders and FOUR wheels -- what you export here is a
-    // design decision, not a transcription.
-    return state_interfaces;
-}
-
-std::vector<hardware_interface::CommandInterface>
-PiCarSystemHardware::export_command_interfaces()
-{
-    std::vector<hardware_interface::CommandInterface> command_interfaces;
-    // TODO(you): velocity command per driven joint.
-    return command_interfaces;
-}
-
 hardware_interface::return_type PiCarSystemHardware::read(
     const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
 {
-    // TODO(you): encoder counts -> wheel velocity -> hw_states_*.
+    // TODO(you): encoder counts -> wheel velocity, then publish it with
+    //   set_state("<joint>/velocity", value);
+    // You have TWO encoders and FOUR wheels. What you set here is a design
+    // decision, not a transcription.
     // REAL-TIME PATH: no allocation, no blocking, no logging.
     return hardware_interface::return_type::OK;
 }
@@ -69,7 +55,9 @@ hardware_interface::return_type PiCarSystemHardware::read(
 hardware_interface::return_type PiCarSystemHardware::write(
     const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
 {
-    // TODO(you): hw_commands_velocity_ -> duty cycle + direction -> HAT.
+    // TODO(you): read the commands with
+    //   get_command("<joint>/velocity");
+    // convert rad/s -> duty cycle + direction, then drive the HAT.
     // REAL-TIME PATH: this does I2C. Think about what that means.
     return hardware_interface::return_type::OK;
 }
