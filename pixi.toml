@@ -39,3 +39,13 @@ libgpiod = "*"
 build = "colcon build --symlink-install --event-handlers console_direct+"
 test = "colcon test --event-handlers console_direct+"
 clean = "rm -rf build install log"
+# Build from a fresh clone of HEAD in a temp dir: only tracked files, exactly
+# what CI sees. Catches "works on my machine" bugs like referencing an
+# untracked directory. Run this before pushing.
+ci-local = """
+rm -rf /tmp/picar-cicheck &&
+git clone --quiet --recurse-submodules . /tmp/picar-cicheck &&
+cd /tmp/picar-cicheck &&
+pixi run build &&
+echo 'CLEAN-CLONE BUILD OK'
+"""
