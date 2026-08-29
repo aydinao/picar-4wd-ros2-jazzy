@@ -27,3 +27,6 @@ jobs:
 
       - name: Build
         run: pixi run build
+
+      - name: Test
+        run: pixi run test

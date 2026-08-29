@@ -357,10 +357,15 @@ The toolchain is **RoboStack via pixi** — ROS 2 Jazzy with no `sudo` and no
 
 ```bash
 pixi install
-pixi run build
+pixi run build      # both packages
+pixi run test       # gtest suite (fails the build on red)
+pixi run ci-local   # build a fresh clone of HEAD, as CI sees it
+pixi run clean      # remove build/, install/, log/
 ```
 
-`pixi run clean` removes `build/`, `install/` and `log/`.
+`ci-local` clones the committed tree, so commit before running it. It catches
+the "works on my machine" class of failure -- untracked files, missing
+submodules -- without waiting on GitHub.
 
 Note that pixi's `libgpiod` is **2.x**, while Ubuntu 24.04's system package is
 1.6.3. The driver targets the v2 API, so build inside pixi on both machines.

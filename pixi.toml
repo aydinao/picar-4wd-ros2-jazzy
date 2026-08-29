@@ -37,7 +37,7 @@ libgpiod = "*"
 
 [tasks]
 build = "colcon build --symlink-install --event-handlers console_direct+"
-test = "colcon test --event-handlers console_direct+"
+test = { cmd = "colcon test --event-handlers console_direct+ --return-code-on-test-failure", depends-on = ["build"] }
 clean = "rm -rf build install log"
 # Build from a fresh clone of HEAD in a temp dir: only tracked files, exactly
 # what CI sees. Catches "works on my machine" bugs like referencing an

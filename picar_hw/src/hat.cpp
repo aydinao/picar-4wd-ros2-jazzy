@@ -1,13 +1,25 @@
 #include "picar_hw/hat.hpp"
+#include "picar_hw/hat_registers.hpp"
+
+#include <string>
+#include <utility>
 #include <cmath>
 #include <vector>
 #include <algorithm>
 
 namespace picar_hw{
 
-    PiCar4WDHAT::PiCar4WDHAT(int bus, uint_fast8_t address, uint8_t channel) : Device(bus, address), channel_(channel), timer_(channel / 4) { }
+    // The filename form is the real constructor; the bus form delegates to it,
+    // because bus N *is* /dev/i2c-N (see I2CPP::open_adapter).
+    Hat::Hat(std::string filename, uint_fast8_t address, uint8_t channel)
+        : Device(std::move(filename), address),
+          channel_(channel),
+          timer_(hat::timer_for_channel(channel)) { }
 
-    void PiCar4WDHAT::set_duty_cycle(float duty_cycle) {
+    Hat::Hat(int bus, uint_fast8_t address, uint8_t channel)
+        : Hat("/dev/i2c-" + std::to_string(bus), address, channel) { }
+
+    void Hat::set_duty_cycle(float duty_cycle) {
         // duty_cycle expected as 0.0–100.0
         if (duty_cycle < 0.0f) duty_cycle = 0.0f;
         if (duty_cycle > 100.0f) duty_cycle = 100.0f;
@@ -16,7 +28,7 @@ namespace picar_hw{
         set_pulse_width(pw);
     }
 
-    void PiCar4WDHAT::set_prescaler(uint16_t prescaler) {
+    void Hat::set_prescaler(uint16_t prescaler) {
         if (!prescaler) {
             prescaler = 1;
         }
@@ -32,7 +44,7 @@ namespace picar_hw{
 
     }
 
-    void PiCar4WDHAT::set_period(uint16_t period) {
+    void Hat::set_period(uint16_t period) {
         if (!period) {
             period = 999;
         }
@@ -48,7 +60,7 @@ namespace picar_hw{
     
     }
 
-    void PiCar4WDHAT::set_pulse_width(uint16_t pulse_width){
+    void Hat::set_pulse_width(uint16_t pulse_width){
         if (!pulse_width){
             pulse_width = 0;
         }
@@ -74,7 +86,7 @@ namespace picar_hw{
      * period (ARR) whose product is closest to CLOCK / frequency
      * gives the best accuracy here.
      */
-    void PiCar4WDHAT::set_frequency(uint16_t frequency) 
+    void Hat::set_frequency(uint16_t frequency) 
     {
         if (!frequency)
         {

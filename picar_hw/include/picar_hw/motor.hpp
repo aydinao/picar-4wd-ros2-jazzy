@@ -14,7 +14,7 @@ namespace picar_hw
         private:
             uint8_t STEP = 10;
             float DELAY = 0.1;
-            PiCar4WDHAT& pwm_pin_;
+            Hat& pwm_pin_;
             uint8_t dir_pin_;
             bool is_reversed_;
             int8_t power_ = 0;
@@ -29,7 +29,7 @@ namespace picar_hw
 
         public:
             using SharedPtr = std::shared_ptr<Motor>;
-            Motor(PiCar4WDHAT& pwm_pin, uint8_t dir_pin, bool is_reversed = false);
+            Motor(Hat& pwm_pin, uint8_t dir_pin, bool is_reversed = false);
             ~Motor();
 
             void set_power(int8_t power);

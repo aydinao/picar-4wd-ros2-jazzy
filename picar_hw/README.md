@@ -15,8 +15,35 @@ picar_hw/
 │   ├── hat_registers.hpp    chip constants (register map, clock, timers)
 │   └── motor.hpp            one wheel: duty cycle + direction GPIO
 ├── src/{hat,motor}.cpp
+├── test/
+│   ├── temp_i2c_file.hpp    RAII temp file standing in for /dev/i2c-1
+│   └── test_hat.cpp         byte-level register tests
 └── tools/twitch.cpp         standalone smoke test
 ```
+
+## Tests
+
+```bash
+pixi run test
+```
+
+The tests assert on the bytes the driver puts **on the wire**, since those are
+the whole contract with the STM32. `Hat`'s filename constructor is pointed at a
+temp file instead of `/dev/i2c-1`: the `ioctl(I2C_SLAVE)` fails on a regular
+file but `write()` still runs, so the register writes land in order and can be
+read back.
+
+Three kinds, deliberately separate:
+
+| Kind | Asserts | Derived from |
+|------|---------|--------------|
+| addressing | channel 13 writes timer 3's PSC/ARR (`0x43`/`0x47`) | the register map |
+| contract | emitted registers decode to the requested frequency within 1% | `f = CLOCK / ((PSC+1)(ARR+1))` |
+| characterisation | exact golden bytes for 50 Hz | current behaviour -- a regression lock, nothing more |
+
+Each test needs a **unique** temp filename: I2CPP caches fds by filename in a
+process-global singleton that is never cleared, so a reused path silently
+returns an earlier test's fd. `mkstemp` handles this.
 
 ## The boundary
 
