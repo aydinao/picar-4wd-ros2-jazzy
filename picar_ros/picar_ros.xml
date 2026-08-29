@@ -1,6 +1,6 @@
-<library path="picar_4wd_hardware">
-  <class name="picar_4wd_hardware/PiCarSystemHardware"
-         type="picar_4wd_hardware::PiCarSystemHardware"
+<library path="picar_ros">
+  <class name="picar_ros/PiCarSystemHardware"
+         type="picar_ros::PiCarSystemHardware"
          base_class_type="hardware_interface::SystemInterface">
     <description>
       ros2_control SystemInterface for the SunFounder PiCar-4WD HAT.

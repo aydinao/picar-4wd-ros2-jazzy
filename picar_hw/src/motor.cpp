@@ -3,14 +3,14 @@
 #include <cstdio>
 #include <gpiod.h>
 
-#include "picar_4wd_hardware/motor.hpp"
+#include "picar_hw/motor.hpp"
 
-namespace picar_4wd_hardware {
+namespace picar_hw {
 
     namespace {
         // libgpiod v2 takes a device path, not a chip name as v1 did.
         constexpr const char * kGpioChipPath = "/dev/gpiochip0";
-        constexpr const char * kConsumer = "picar_4wd_hardware";
+        constexpr const char * kConsumer = "picar_hw";
     }
 
     Motor::Motor(PiCar4WDHAT& pwm_pin, uint8_t dir_pin, bool is_reversed)
