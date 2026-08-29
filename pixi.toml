@@ -1,0 +1,51 @@
+# RoboStack/pixi environment. Gives ROS 2 Jazzy with no sudo and no apt, on
+# both the x86_64 laptop and the aarch64 Pi, from the same manifest.
+#
+#   pixi install          resolve + fetch
+#   pixi shell            enter the environment
+#   pixi run build        colcon build
+#
+[workspace]
+name = "picar-4wd-ros2-jazzy"
+version = "0.1.0"
+description = "ros2_control hardware interface for the SunFounder PiCar-4WD HAT"
+channels = ["https://prefix.dev/conda-forge", "https://prefix.dev/robostack-jazzy"]
+platforms = ["linux-64", "linux-aarch64"]
+
+[dependencies]
+# --- ROS 2 ---
+ros-jazzy-ros2-control = "*"       # hardware_interface, controller_manager
+ros-jazzy-ros2-controllers = "*"   # diff_drive_controller, joint_state_broadcaster
+ros-jazzy-robot-state-publisher = "*"
+ros-jazzy-xacro = "*"
+ros-jazzy-ament-cmake = "*"
+
+# --- build tooling ---
+colcon-common-extensions = "*"
+cmake = "*"
+ninja = "*"
+pkg-config = "*"
+compilers = "*"
+
+# --- hardware ---
+# WARNING: the driver uses the libgpiod *v1* API (gpiod_chip_open_by_name,
+# gpiod_line_request_output). Ubuntu 24.04 ships 1.6.3, but conda-forge may
+# resolve to 2.x, where those symbols do not exist. After `pixi install`, run
+#   pixi run -- pkg-config --modversion libgpiod
+# and if it reports 2.x, pin this to "<2" or drop it and use the system lib.
+libgpiod = "*"
+
+[tasks]
+build = "colcon build --symlink-install --event-handlers console_direct+"
+test = "colcon test --event-handlers console_direct+"
+clean = "rm -rf build install log"
+# Build from a fresh clone of HEAD in a temp dir: only tracked files, exactly
+# what CI sees. Catches "works on my machine" bugs like referencing an
+# untracked directory. Run this before pushing.
+ci-local = """
+rm -rf /tmp/picar-cicheck &&
+git clone --quiet --recurse-submodules . /tmp/picar-cicheck &&
+cd /tmp/picar-cicheck &&
+pixi run build &&
+echo 'CLEAN-CLONE BUILD OK'
+"""

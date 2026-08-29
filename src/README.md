@@ -19,7 +19,7 @@ blocker: the MCU is held in reset".
 Build dependencies (Ubuntu 24.04 on Pi):
 
 ```bash
-sudo apt install -y build-essential cmake git i2c-tools
+sudo apt install -y build-essential cmake git i2c-tools gpiod libgpiod libgpiod-dev
 ```
 
 Runtime: your user must be in the `i2c` group, otherwise every run needs `sudo`:
@@ -27,6 +27,23 @@ Runtime: your user must be in the `i2c` group, otherwise every run needs `sudo`:
 ```bash
 sudo usermod -aG i2c $USER
 # log out and back in
+```
+
+## GPIO CLI Test
+
+To list all GPIO controllers:
+
+```bash
+sudo gpiodetect
+
+#gpiochip0 [pinctrl-bcm2711] (58 lines)
+#gpiochip1 [raspberrypi-exp-gpio] (8 lines)
+
+```
+List all pin information for the gpiochip0 controller
+
+```bash
+gpioinfo 0
 ```
 
 ---
@@ -37,11 +54,14 @@ sudo usermod -aG i2c $USER
 picar-4wd-ros2-jazzy/
 ├── CMakeLists.txt
 ├── include/
-│   └── 4WDHAT.hpp           // public driver header
+│   ├── 4WDHAT.hpp           // PWM driver header
+│   └── motor.hpp            // motor controller header
 ├── src/
-│   ├── main.cpp             // test harness
+│   ├── main.cpp             // PWM test harness
+│   ├── motor.cpp            // motor controller implementation
+│   ├── test_motor.cpp       // 4-wheel motor test harness
 │   └── device/
-│       └── 4wdhat.cpp       // driver implementation
+│       └── 4WDHAT.cpp       // PWM driver implementation
 └── libs/
     └── I2CPP/               // vendored I2C library (see Dependencies)
 ```
@@ -65,6 +85,13 @@ git clone https://github.com/mwaverecycling/I2CPP.git libs/I2CPP
 `PiCar4WDHAT` inherits from `i2cpp::Device`, which provides protected `read_i2c()` and
 `write_i2c()` helpers that wrap the bus file descriptor and device address. The driver
 never touches `ioctl` directly.
+
+[`libgpiod`](https://libgpiod.readthedocs.io) — the standard Linux GPIO character device
+library. Used by `Motor` to drive the direction pin on each wheel.
+
+```bash
+sudo apt install libgpiod-dev
+```
 
 ---
 
@@ -92,7 +119,27 @@ After running the executable the PiCar wheel should start spinning. Executing th
 
 All members live in namespace `PiCar_4WD`.
 
-### Construction
+### `Motor`
+
+```cpp
+Motor(PiCar4WDHAT& pwm, uint8_t dir_pin, bool is_reversed = false);
+```
+
+| Param         | Meaning                                              |
+|---------------|------------------------------------------------------|
+| `pwm`         | A `PiCar4WDHAT` instance for this wheel's channel   |
+| `dir_pin`     | BCM GPIO number for the direction line               |
+| `is_reversed` | Flip direction logic (e.g. for physically mirrored wheels) |
+
+| Method                        | Effect                                              |
+|-------------------------------|-----------------------------------------------------|
+| `set_power(int8_t power)`     | Drive motor at −100…100. 0 = stop, negatives reverse. Power is scaled: any non-zero value is mapped to 50–100% duty cycle to overcome motor stiction. |
+
+The destructor releases the GPIO line and closes the chip handle automatically.
+
+---
+
+### `PiCar4WDHAT`
 
 ```cpp
 PiCar4WDHAT(int bus, uint_fast8_t address, uint8_t channel);
@@ -176,9 +223,7 @@ will be off-by-one until you do.
 
 ## Known limitations
 
-- **No motor-direction handling.** The driver only outputs PWM. Drive motors need a
-  matching direction GPIO line set on the Pi for controlled rotation; that lives in
-  the (yet-to-be-written) motor wrapper above this driver, not here.
+- **No `SIGKILL` safety for `PiCar4WDHAT`.** Nothing stops a spinning wheel on `kill -9` at the PWM level.
 - **No address auto-probe.** Construction takes the address as a parameter. If your
   board sits at `0x15` instead of `0x14`, pass `0x15`.
 - **No `SIGKILL` safety.** Nothing catches `kill -9`; the wheel will keep spinning.
@@ -190,7 +235,7 @@ will be off-by-one until you do.
 
 ## Roadmap
 
-- [ ] Motor wrapper class — combines PWM channel + direction GPIO into one `Motor`.
+- [x] Motor wrapper class — combines PWM channel + direction GPIO into one `Motor`.
 - [ ] Servo wrapper class — angle in degrees → pulse width, with calibration.
 - [ ] ADC read support — the same MCU at `0x14` also exposes the battery voltage and
   line-follower readings.

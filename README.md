@@ -267,10 +267,115 @@ i2cdetect -y 1
 
 ---
 
-## Open items / next steps
+## ros2_control hardware package
 
-- Confirm `picar-4wd test motor` runs end-to-end now that the MCU is reachable.
-- Decide on dependency strategy for reproducibility (apt list + setup script, or container).
-- Wrap the hardware layer in a thin ROS 2 node (`cmd_vel` → wheel speeds) once bring-up is stable.
-- The HAT must be battery-powered; running the Pi from external supply only will produce
-  `OSError: [Errno 121] Remote I/O error` on motor commands.
+The C++ layer is a **`ros2_control` hardware component**: a `SystemInterface`
+plugin loaded by `controller_manager`, with the reverse-engineered HAT driver
+underneath it.
+
+| Path | Role |
+|------|------|
+| `hardware/picar_system.cpp` | `SystemInterface` plugin — lifecycle, `read()`, `write()` |
+| `hardware/hat.cpp` | PWM driver — wraps the HAT's I2C registers |
+| `hardware/motor.cpp` | One wheel: duty cycle + direction GPIO (libgpiod **v2**) |
+| `hardware/include/picar_4wd_hardware/hat_registers.hpp` | Chip constants, documented |
+| `description/` | URDF and the `<ros2_control>` tag |
+| `bringup/` | Controller config and launch files |
+
+Robot *wiring* — which PWM channel and BCM pin each wheel uses — lives in the
+URDF as parameters, not as C++ constants. Only facts about the chip itself are
+compiled in.
+
+### The HAT's MCU is an STM32
+
+`REG_PSC` and `REG_ARR` are STM32 timer register names (prescaler, auto-reload),
+72 MHz is the STM32F103's maximum system clock, and 4 timers × 4 channels
+accounts for the 16 PWM channels the board exposes. The firmware is exposing
+`TIMx->PSC`, `TIMx->ARR` and `TIMx->CCRy` over I2C, so ST's **RM0008** timer
+chapter documents the far side of the bus:
+
+```
+f = CLOCK / ((PSC + 1) × (ARR + 1))
+```
+
+That `+ 1` is also why the Python writes `n - 1` before every register write —
+the STM32 timer registers count from zero.
+
+**Consequence:** channels sharing a timer share PSC and ARR. Channels 12 and 13
+are one timer, 8 and 9 another — so the four wheels sit on only two timers, and
+their PWM frequencies are not independent.
+
+### How the pin assignments were determined
+
+SunFounder's Python motor init is the source of truth:
+
+```python
+left_front  = Motor(PWM("P13"), Pin("D4"))
+right_front = Motor(PWM("P12"), Pin("D5"))
+left_rear   = Motor(PWM("P8"),  Pin("D11"))
+right_rear  = Motor(PWM("P9"),  Pin("D15"))
+```
+
+The PWM channel number is the integer in the `P` name (`P13` → channel `13`).
+The `D`-pin names resolve to BCM GPIO numbers via `picar_4wd/pin.py`:
+
+```python
+"D4": 23, "D5": 24, "D11": 13, "D15": 20
+```
+
+The I2C address `0x14` was confirmed in §4.
+
+### Encoders
+
+From `picar_4wd/speed.py`, the slotted discs on the motors are real encoders:
+
+| Fact | Value |
+|------|-------|
+| Encoder GPIO | **BCM 25** and **BCM 4** |
+| Slots per revolution | **20** (18° resolution) |
+| Wheel radius | ~3.3 cm — see note below |
+| Channels | **One** — magnitude only, no direction |
+
+Two encoders for four motors, so per-wheel velocity is not measurable; direction
+is inferred from the commanded direction pin, not sensed.
+
+> SunFounder's `test3` prints its result as `mm/s`, but `2 * pi * 3.3 * rps` only
+> yields mm/s for a 3.3 **mm** radius. The label is wrong — the radius is in cm.
+> Measure it before trusting either.
+
+---
+
+## Building
+
+The toolchain is **RoboStack via pixi** — ROS 2 Jazzy with no `sudo` and no
+`apt`, from one manifest that resolves on both x86_64 and the Pi's aarch64:
+
+```bash
+pixi install
+pixi run build
+```
+
+`pixi run clean` removes `build/`, `install/` and `log/`.
+
+Note that pixi's `libgpiod` is **2.x**, while Ubuntu 24.04's system package is
+1.6.3. The driver targets the v2 API, so build inside pixi on both machines.
+
+---
+
+## Status
+
+**Working**
+- HAT bring-up on Ubuntu 24.04 (§1–5) — the MCU appears at `0x14` on every boot
+- PWM driver: frequency, pulse width, duty cycle, verified against hardware
+- Motor control: four wheels driven forward under their own power
+- Builds green as a `ros2_control` package on x86_64 and in CI
+
+**Not yet**
+- `picar_system.cpp` lifecycle, `read()` and `write()` bodies
+- URDF and controller configuration — blocked on the joint-model decision
+  (four motors, two encoders, so per-wheel state is not measurable)
+- Encoder edge counting via libgpiod events
+- Servo and ADC (battery, line-follower) channels
+
+**Gotcha:** the HAT must be battery-powered. Running the Pi from an external
+supply alone produces `OSError: [Errno 121] Remote I/O error` on motor commands.

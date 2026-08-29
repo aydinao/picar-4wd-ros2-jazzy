@@ -1,0 +1,29 @@
+name: build
+
+on:
+  # Only main on push; PRs get their own run. Avoids two identical checks
+  # on every PR from a branch in this repo.
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    name: colcon build (RoboStack Jazzy, x86_64)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # Same environment as local dev: RoboStack via pixi. No sudo, no apt.
+      # pixi-version is pinned to the version that generated pixi.lock, so CI
+      # cannot fail on a lockfile it is too old to parse.
+      - uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          pixi-version: v0.70.1
+          frozen: true
+          cache: true
+
+      - name: Build
+        run: pixi run build
