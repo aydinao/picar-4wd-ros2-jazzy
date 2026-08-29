@@ -13,7 +13,7 @@ namespace picar_hw {
         constexpr const char * kConsumer = "picar_hw";
     }
 
-    Motor::Motor(PiCar4WDHAT& pwm_pin, uint8_t dir_pin, bool is_reversed)
+    Motor::Motor(Hat& pwm_pin, uint8_t dir_pin, bool is_reversed)
         : pwm_pin_(pwm_pin), dir_pin_(dir_pin), is_reversed_(is_reversed)
     {
         chip_ = gpiod_chip_open(kGpioChipPath);

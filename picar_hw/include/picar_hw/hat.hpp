@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 
 #include "i2cpp/device.hpp"
 
@@ -15,7 +16,7 @@ namespace picar_hw
   
 {
    
-    class PiCar4WDHAT : public i2cpp::Device
+    class Hat : public i2cpp::Device
     {
         private:
             static constexpr int REG_CHN = 0x20;
@@ -43,14 +44,26 @@ namespace picar_hw
             void set_period(uint16_t period);
 
         public:
-            using SharedPtr = std::shared_ptr<PiCar4WDHAT>;
+            using SharedPtr = std::shared_ptr<Hat>;
 
             /**
-             * Construct a PiCar4WDHAT with the given bus and address.
+             * Construct a Hat with the given bus and address.
              * @param bus I2C interface number to use
-             * @param address Adress of the device on the I2C network
+             * @param address Address of the device on the I2C network
+             * @param channel PWM channel P0-P13; selects the pulse-width register,
+             *        and via channel / 4 the timer sharing prescaler and period
              */
-            PiCar4WDHAT(int bus, uint_fast8_t address, uint8_t channel);
+            Hat(int bus, uint_fast8_t address, uint8_t channel);
+            
+            /**
+             * Construct a Hat against a device file instead of a bus number.
+             * Bus N is shorthand for /dev/i2c-N, so this is the same thing said
+             * differently. Tests point it at a temp file to capture register writes.
+             * @param filename Path to the I2C device file
+             * @param address Address of the device on the I2C network
+             * @param channel PWM channel P0-P13
+             */
+            Hat(std::string filename, uint_fast8_t address, uint8_t channel);
             
             /**
              * The output PWM frequency

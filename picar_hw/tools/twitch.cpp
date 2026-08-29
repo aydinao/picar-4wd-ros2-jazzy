@@ -28,7 +28,7 @@ int main(int argc, char ** argv)
     const auto power = static_cast<std::int8_t>(std::atoi(argv[3]));
     const double seconds = std::atof(argv[4]);
 
-    picar_hw::PiCar4WDHAT pwm(1, picar_hw::hat::kDefaultAddress, channel);
+    picar_hw::Hat pwm(1, picar_hw::hat::kDefaultAddress, channel);
     picar_hw::Motor motor(pwm, dir_gpio);
 
     if (!motor.ok()) {
