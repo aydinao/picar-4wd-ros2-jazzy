@@ -1,9 +1,9 @@
-#include "picar_4wd_hardware/hat.hpp"
+#include "picar_hw/hat.hpp"
 #include <cmath>
 #include <vector>
 #include <algorithm>
 
-namespace picar_4wd_hardware{
+namespace picar_hw{
 
     PiCar4WDHAT::PiCar4WDHAT(int bus, uint_fast8_t address, uint8_t channel) : Device(bus, address), channel_(channel), timer_(channel / 4) { }
 

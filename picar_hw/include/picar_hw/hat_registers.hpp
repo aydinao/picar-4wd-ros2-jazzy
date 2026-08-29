@@ -17,7 +17,7 @@
 // so ST's RM0008 timer chapter documents the far side of the bus.
 // ---------------------------------------------------------------------------
 
-namespace picar_4wd_hardware::hat
+namespace picar_hw::hat
 {
 
 /// Per-channel pulse width (compare) register base. Channel N is kRegChannelBase + N.
@@ -53,4 +53,4 @@ constexpr std::uint8_t timer_for_channel(std::uint8_t channel)
 /// Registers are written big-endian as [reg, value_high, value_low].
 inline constexpr std::size_t kRegisterWriteBytes = 3;
 
-}  // namespace picar_4wd_hardware::hat
+}  // namespace picar_hw::hat

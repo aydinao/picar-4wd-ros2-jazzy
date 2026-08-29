@@ -5,7 +5,7 @@
 #include "hardware_interface/types/hardware_interface_return_values.hpp"
 #include "rclcpp_lifecycle/state.hpp"
 
-namespace picar_4wd_hardware
+namespace picar_ros
 {
 
 // ---------------------------------------------------------------------------
@@ -19,15 +19,11 @@ namespace picar_4wd_hardware
 //   read/write    every control cycle, forever. REAL-TIME PATH.
 //   on_deactivate stop the motors.
 //
-// API NOTE: this targets ros2_control 4.45 (what RoboStack ships), which is
-// NEWER than the API used by ros2_control_demos on the `jazzy` branch. Two
-// things differ from that reference:
-//   * on_init takes HardwareComponentInterfaceParams, not HardwareInfo.
-//   * export_state_interfaces()/export_command_interfaces() are deprecated.
-//     The base class builds the interfaces from the URDF automatically, and
-//     you reach them by NAME with set_state()/get_command(). There are no
-//     member vectors to manage and no pointers handed out.
-// The installed header is the source of truth:
+// API NOTE: targets hardware_interface 4.45.1, which matches
+// ros2_control_demos example_2 on the `jazzy` branch. Interfaces are NOT
+// exported by hand -- the base class builds them from the URDF and you reach
+// them by name with set_state()/get_command(). The installed header is the
+// source of truth:
 //   .pixi/envs/default/include/hardware_interface/hardware_interface/
 // ---------------------------------------------------------------------------
 class PiCarSystemHardware : public hardware_interface::SystemInterface
@@ -57,4 +53,4 @@ private:
     // object or two is exactly the design question this port forces.
 };
 
-}  // namespace picar_4wd_hardware
+}  // namespace picar_ros

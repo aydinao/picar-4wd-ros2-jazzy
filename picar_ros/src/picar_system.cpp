@@ -1,10 +1,10 @@
-#include "picar_4wd_hardware/picar_system.hpp"
+#include "picar_ros/picar_system.hpp"
 
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "pluginlib/class_list_macros.hpp"
 #include "rclcpp/rclcpp.hpp"
 
-namespace picar_4wd_hardware
+namespace picar_ros
 {
 
 hardware_interface::CallbackReturn PiCarSystemHardware::on_init(
@@ -62,7 +62,7 @@ hardware_interface::return_type PiCarSystemHardware::write(
     return hardware_interface::return_type::OK;
 }
 
-}  // namespace picar_4wd_hardware
+}  // namespace picar_ros
 
 PLUGINLIB_EXPORT_CLASS(
-    picar_4wd_hardware::PiCarSystemHardware, hardware_interface::SystemInterface)
+    picar_ros::PiCarSystemHardware, hardware_interface::SystemInterface)

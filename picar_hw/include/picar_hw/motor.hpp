@@ -4,9 +4,9 @@
 #include <memory>
 #include <gpiod.h>
 
-#include "picar_4wd_hardware/hat.hpp"
+#include "picar_hw/hat.hpp"
 
-namespace picar_4wd_hardware
+namespace picar_hw
 {
 
     class Motor

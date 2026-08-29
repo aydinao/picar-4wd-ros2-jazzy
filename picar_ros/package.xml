@@ -1,17 +1,18 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>picar_4wd_hardware</name>
+  <name>picar_ros</name>
   <version>0.1.0</version>
   <description>
-    ros2_control hardware interface for the SunFounder PiCar-4WD HAT
-    (onboard STM32 at I2C 0x14) on a Raspberry Pi 4B running Ubuntu 24.04.
+    ros2_control hardware interface for the SunFounder PiCar-4WD. A thin
+    SystemInterface plugin over the picar_hw driver.
   </description>
   <maintainer email="aydin.orhan.24@outlook.com">Aydin Orhan</maintainer>
   <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <depend>picar_hw</depend>
   <depend>hardware_interface</depend>
   <depend>pluginlib</depend>
   <depend>rclcpp</depend>
@@ -25,6 +26,6 @@
 
   <export>
     <build_type>ament_cmake</build_type>
-    <hardware_interface plugin="${prefix}/picar_4wd_hardware.xml"/>
+    <hardware_interface plugin="${prefix}/picar_ros.xml"/>
   </export>
 </package>

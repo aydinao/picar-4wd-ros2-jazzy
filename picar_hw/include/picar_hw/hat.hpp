@@ -10,7 +10,7 @@
 
 #include "i2cpp/device.hpp"
 
-namespace picar_4wd_hardware
+namespace picar_hw
 
   
 {

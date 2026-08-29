@@ -269,18 +269,23 @@ i2cdetect -y 1
 
 ## ros2_control hardware package
 
-The C++ layer is a **`ros2_control` hardware component**: a `SystemInterface`
-plugin loaded by `controller_manager`, with the reverse-engineered HAT driver
-underneath it.
+The C++ layer is split into two packages so the driver is usable without ROS:
 
-| Path | Role |
-|------|------|
-| `hardware/picar_system.cpp` | `SystemInterface` plugin — lifecycle, `read()`, `write()` |
-| `hardware/hat.cpp` | PWM driver — wraps the HAT's I2C registers |
-| `hardware/motor.cpp` | One wheel: duty cycle + direction GPIO (libgpiod **v2**) |
-| `hardware/include/picar_4wd_hardware/hat_registers.hpp` | Chip constants, documented |
-| `description/` | URDF and the `<ros2_control>` tag |
-| `bringup/` | Controller config and launch files |
+| Package | Contents | ROS dependency |
+|---------|----------|----------------|
+| `picar_hw` | PWM driver, motor control, encoders, chip constants, and a standalone `twitch` tool | **none** |
+| `picar_ros` | `SystemInterface` plugin, URDF (`description/`), launch and controller config (`bringup/`) | hardware_interface, pluginlib |
+
+`picar_hw` links only libc, libstdc++ and libgpiod — it builds and tests without
+a ROS installation, and works on any board wired to the same HAT. `picar_ros` is
+a thin wrapper: lifecycle, `read()`, `write()`, nothing else.
+
+Drive a single wheel with no ROS in the loop:
+
+```bash
+# twitch <pwm_channel> <dir_gpio> <power -100..100> <seconds>
+install/picar_hw/lib/picar_hw/twitch 13 23 60 2
+```
 
 Robot *wiring* — which PWM channel and BCM pin each wheel uses — lives in the
 URDF as parameters, not as C++ constants. Only facts about the chip itself are
