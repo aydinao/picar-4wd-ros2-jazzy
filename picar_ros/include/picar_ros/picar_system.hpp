@@ -1,5 +1,13 @@
 #pragma once
 
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "picar_hw/hat.hpp"
+#include "picar_hw/motor.hpp"
+
 #include "hardware_interface/system_interface.hpp"
 #include "hardware_interface/types/hardware_component_interface_params.hpp"
 #include "hardware_interface/types/hardware_interface_return_values.hpp"
@@ -26,6 +34,16 @@ namespace picar_ros
 // source of truth:
 //   .pixi/envs/default/include/hardware_interface/hardware_interface/
 // ---------------------------------------------------------------------------
+/// How one wheel is wired, read from its <joint> block in the URDF.
+struct WheelConfig
+{
+    std::string joint_name;
+    uint8_t pwm_channel;   ///< HAT PWM channel, P0-P13
+    uint8_t dir_gpio;      ///< BCM number of the direction line
+    bool reversed;         ///< true for the mirrored rear wheels
+    bool on_left;          ///< which side's encoder measures this wheel
+};
+
 class PiCarSystemHardware : public hardware_interface::SystemInterface
 {
 public:
@@ -48,9 +66,30 @@ public:
         const rclcpp::Time & time, const rclcpp::Duration & period) override;
 
 private:
-    // Hardware lives here. Types deliberately left for you: how many HAT
-    // objects there are, who owns them, and whether the two encoders are one
-    // object or two is exactly the design question this port forces.
+    // Configuration parsed from the URDF in on_init(). Hardware handles are
+    // not held yet: the HAT and Motor objects are constructed in on_configure()
+    // once they exist.
+    uint8_t i2c_bus_;
+    uint_fast8_t i2c_address_;
+    uint16_t pwm_frequency_hz_;
+    std::string gpio_chip_;
+    uint8_t left_encoder_gpio_;
+    uint8_t right_encoder_gpio_;
+    uint8_t encoder_slots_per_rev_;
+    uint8_t reset_gpio_;
+
+    /// One entry per <joint>, in the order the URDF declares them.
+    std::vector<WheelConfig> wheels_;
+
+    // Hardware, created in on_configure(). Held by pointer because Motor owns
+    // a GPIO request and holds a Hat reference, so it is neither copyable nor
+    // movable and cannot live directly in a vector.
+    //
+    // DECLARATION ORDER IS LOAD-BEARING: members are destroyed in reverse
+    // order, so motors_ is torn down before hats_. A Motor holds a Hat& and
+    // touches it in its destructor.
+    std::vector<std::unique_ptr<picar_hw::Hat>> hats_;
+    std::vector<std::unique_ptr<picar_hw::Motor>> motors_;
 };
 
 }  // namespace picar_ros
