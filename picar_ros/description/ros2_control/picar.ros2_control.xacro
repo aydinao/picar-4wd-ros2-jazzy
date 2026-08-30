@@ -1,0 +1,113 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!--
+    Hardware description for the PiCar-4WD.
+
+    Four independently commanded motors -> four joints. The robot is SKID-STEER
+    (turn_left drives the left side backwards, see SunFounder's picar_4wd), so
+    diff_drive_controller applies, with two wheel names per side.
+
+    Everything that varies with wiring lives here as a <param>, not in C++.
+    picar_hw knows about the chip; this file knows about this robot.
+  -->
+  <xacro:macro name="picar_ros2_control" params="name prefix use_mock_hardware:=false">
+
+    <ros2_control name="${name}" type="system">
+
+      <xacro:if value="${use_mock_hardware}">
+        <hardware>
+          <plugin>mock_components/GenericSystem</plugin>
+          <param name="calculate_dynamics">true</param>
+        </hardware>
+      </xacro:if>
+
+      <xacro:unless value="${use_mock_hardware}">
+        <hardware>
+          <plugin>picar_ros/PiCarSystemHardware</plugin>
+
+          <!--
+            I2C. The address is parsed as a C integer literal (std::stoul with
+            base 0), so 0x14 and 20 both mean the same device. Written in hex
+            here because i2cdetect and every datasheet do.
+            hardware_interface's stoui* helpers cannot be used for this one:
+            they are base 10 and throw on the "0x" prefix.
+          -->
+          <param name="i2c_bus">1</param>
+          <param name="i2c_address">0x14</param>
+          <param name="pwm_frequency_hz">50</param>
+
+          <!-- GPIO character device. Correct for a Pi 4B; differs on Pi 5. -->
+          <param name="gpio_chip">/dev/gpiochip0</param>
+
+          <!--
+            The HAT's MCU is held in reset until this line is pulsed LOW->HIGH.
+            SunFounder's pin.py maps its "D16" to BCM 21 - note the name does
+            NOT match the number. See the repo README, section 4.
+          -->
+          <param name="reset_gpio">21</param>
+
+          <!--
+            Two encoders for four wheels: one per side. Which physical pin is
+            which side is NOT established - speed.py uses Speed(25) and
+            Speed(4) without labelling them. VERIFY ON HARDWARE before trusting
+            odometry, by spinning one side and seeing which counter moves.
+          -->
+          <param name="left_encoder_gpio">25</param>
+          <param name="right_encoder_gpio">4</param>
+          <param name="encoder_slots_per_rev">20</param>
+        </hardware>
+      </xacro:unless>
+
+      <!--
+        PWM channel and direction GPIO per wheel, recovered from SunFounder's
+        Python (P-name -> channel, D-name -> BCM via pin.py). The rear wheels
+        are mounted mirrored, hence reversed.
+
+        NOTE: channels 12 and 13 share timer 3, and 8 and 9 share timer 2, so
+        the four wheels sit on two timers and their PWM frequencies are not
+        independent. See picar_hw/README.md.
+      -->
+      <joint name="${prefix}left_front_wheel_joint">
+        <param name="pwm_channel">13</param>
+        <param name="dir_gpio">23</param>
+        <param name="reversed">false</param>
+        <param name="encoder_side">left</param>
+        <command_interface name="velocity"/>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+
+      <joint name="${prefix}right_front_wheel_joint">
+        <param name="pwm_channel">12</param>
+        <param name="dir_gpio">24</param>
+        <param name="reversed">false</param>
+        <param name="encoder_side">right</param>
+        <command_interface name="velocity"/>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+
+      <joint name="${prefix}left_rear_wheel_joint">
+        <param name="pwm_channel">8</param>
+        <param name="dir_gpio">13</param>
+        <param name="reversed">true</param>
+        <param name="encoder_side">left</param>
+        <command_interface name="velocity"/>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+
+      <joint name="${prefix}right_rear_wheel_joint">
+        <param name="pwm_channel">9</param>
+        <param name="dir_gpio">20</param>
+        <param name="reversed">true</param>
+        <param name="encoder_side">right</param>
+        <command_interface name="velocity"/>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+
+    </ros2_control>
+  </xacro:macro>
+</robot>

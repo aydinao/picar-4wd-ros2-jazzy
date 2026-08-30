@@ -1,0 +1,80 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="picar">
+
+  <xacro:arg name="prefix" default=""/>
+  <xacro:property name="prefix" value="$(arg prefix)"/>
+  <xacro:arg name="use_mock_hardware" default="false"/>
+
+  <!-- Relative rather than $(find picar_ros): resolves the same way in the
+       source tree and in share/picar_ros/description/, and needs no ament
+       index, which the test environment does not have. -->
+  <xacro:include filename="../ros2_control/picar.ros2_control.xacro"/>
+
+  <!--
+    Geometry. EVERY NUMBER HERE IS A PLACEHOLDER - measure the real robot.
+    wheel_radius and wheel_separation in particular feed odometry directly:
+    a 5% error in radius is a 5% error in every distance the robot reports.
+
+    speed.py implies a 3.3 cm radius (it computes 2*pi*3.3*rps and labels the
+    result mm/s, which is wrong by a factor of ten - the radius is in cm).
+  -->
+  <xacro:property name="wheel_radius"     value="0.033"/>   <!-- MEASURE -->
+  <xacro:property name="wheel_width"      value="0.026"/>   <!-- MEASURE -->
+  <xacro:property name="wheel_separation" value="0.117"/>   <!-- MEASURE (track width) -->
+  <xacro:property name="wheelbase"        value="0.095"/>   <!-- MEASURE (front to rear) -->
+  <xacro:property name="base_length"      value="0.165"/>   <!-- MEASURE -->
+  <xacro:property name="base_width"       value="0.095"/>   <!-- MEASURE -->
+  <xacro:property name="base_height"      value="0.030"/>   <!-- MEASURE -->
+
+  <material name="grey"><color rgba="0.4 0.4 0.4 1.0"/></material>
+  <material name="dark"><color rgba="0.1 0.1 0.1 1.0"/></material>
+
+  <link name="${prefix}base_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><box size="${base_length} ${base_width} ${base_height}"/></geometry>
+      <material name="grey"/>
+    </visual>
+    <collision>
+      <geometry><box size="${base_length} ${base_width} ${base_height}"/></geometry>
+    </collision>
+  </link>
+
+  <!-- One wheel: a cylinder rolling about its own Y axis. -->
+  <xacro:macro name="wheel" params="name x y">
+    <link name="${prefix}${name}">
+      <visual>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+        <material name="dark"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+      </collision>
+    </link>
+
+    <!--
+      continuous: rotates without limit about Y. The joint NAME here must match
+      the joint name in picar.ros2_control.xacro exactly, or the controller
+      claims an interface that does not exist.
+    -->
+    <joint name="${prefix}${name}_joint" type="continuous">
+      <parent link="${prefix}base_link"/>
+      <child link="${prefix}${name}"/>
+      <origin xyz="${x} ${y} ${-base_height/2}" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:wheel name="left_front_wheel"  x="${ wheelbase/2}" y="${ wheel_separation/2}"/>
+  <xacro:wheel name="right_front_wheel" x="${ wheelbase/2}" y="${-wheel_separation/2}"/>
+  <xacro:wheel name="left_rear_wheel"   x="${-wheelbase/2}" y="${ wheel_separation/2}"/>
+  <xacro:wheel name="right_rear_wheel"  x="${-wheelbase/2}" y="${-wheel_separation/2}"/>
+
+  <xacro:picar_ros2_control
+    name="PiCarSystem"
+    prefix="$(arg prefix)"
+    use_mock_hardware="$(arg use_mock_hardware)"/>
+
+</robot>

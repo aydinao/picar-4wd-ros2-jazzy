@@ -43,6 +43,15 @@ install(TARGETS picar_ros
   RUNTIME DESTINATION bin
 )
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_pytest REQUIRED)
+  # launch_testing_ros 0.26 registers a pytest hook that launch_testing 3.4 no
+  # longer declares, so pytest aborts during collection before any test runs.
+  # Neither plugin is used here. Environment mismatch, not a test failure.
+  ament_add_pytest_test(test_description test/test_description.py
+    ENV "PYTEST_ADDOPTS=-p no:launch_ros -p no:launch_testing")
+endif()
+
 ament_export_targets(export_picar_ros HAS_LIBRARY_TARGET)
 ament_export_dependencies(picar_hw hardware_interface pluginlib rclcpp rclcpp_lifecycle)
 ament_package()

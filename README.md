@@ -287,6 +287,19 @@ Drive a single wheel with no ROS in the loop:
 install/picar_hw/lib/picar_hw/twitch 13 23 60 2
 ```
 
+Bring the stack up (no robot needed with mock hardware):
+
+```bash
+ros2 launch picar_ros picar.launch.py use_mock_hardware:=true
+ros2 topic pub /picar_base_controller/cmd_vel geometry_msgs/msg/TwistStamped \
+  '{twist: {linear: {x: 0.1}}}'
+```
+
+The robot is **skid-steer**, not Ackermann -- SunFounder's `turn_left` drives
+the left side backwards. Four independently commanded motors means four joints,
+grouped two per side for `diff_drive_controller`. Only two encoders exist, one
+per side, so per-wheel velocity is not measurable.
+
 Robot *wiring* — which PWM channel and BCM pin each wheel uses — lives in the
 URDF as parameters, not as C++ constants. Only facts about the chip itself are
 compiled in.
@@ -367,6 +380,43 @@ pixi run clean      # remove build/, install/, log/
 the "works on my machine" class of failure -- untracked files, missing
 submodules -- without waiting on GitHub.
 
+### While working on one package
+
+```bash
+# rebuild just one package, and show only the compiler errors
+pixi run build --packages-select picar_ros 2>&1 | grep -E "error:|warning:"
+
+# run only one package's tests
+pixi run test --packages-select picar_hw
+```
+
+### Running it
+
+```bash
+pixi shell                     # ROS on PATH
+source install/setup.bash      # re-run after every build
+
+ros2 launch picar_ros picar.launch.py use_mock_hardware:=true
+```
+
+In a second terminal (same `pixi shell` + `source install/setup.bash`):
+
+```bash
+ros2 control list_hardware_components    # is the plugin loaded and active?
+ros2 control list_hardware_interfaces    # which are [claimed]?
+ros2 control list_controllers            # are the controllers active?
+
+ros2 topic echo /joint_states
+ros2 topic pub --once /picar_base_controller/cmd_vel \
+  geometry_msgs/msg/TwistStamped '{twist: {linear: {x: 0.1}}}'
+```
+
+On the Pi, to move one wheel with no ROS involved at all:
+
+```bash
+install/picar_hw/lib/picar_hw/twitch 13 23 60 2
+```
+
 Note that pixi's `libgpiod` is **2.x**, while Ubuntu 24.04's system package is
 1.6.3. The driver targets the v2 API, so build inside pixi on both machines.
 
@@ -379,12 +429,14 @@ Note that pixi's `libgpiod` is **2.x**, while Ubuntu 24.04's system package is
 - PWM driver: frequency, pulse width, duty cycle, verified against hardware
 - Motor control: four wheels driven forward under their own power
 - Builds green as a `ros2_control` package on x86_64 and in CI
+- Full bring-up verified with mock hardware: `controller_manager` loads the
+  component, `diff_drive_controller` claims all four wheel velocity commands
 
 **Not yet**
-- `picar_system.cpp` lifecycle, `read()` and `write()` bodies
-- URDF and controller configuration — blocked on the joint-model decision
-  (four motors, two encoders, so per-wheel state is not measurable)
+- `picar_system.cpp` lifecycle, `read()` and `write()` bodies -- the plugin
+  loads and activates, but does nothing
 - Encoder edge counting via libgpiod events
+- Every dimension in the URDF is a placeholder; measure the robot
 - Servo and ADC (battery, line-follower) channels
 
 **Gotcha:** the HAT must be battery-powered. Running the Pi from an external

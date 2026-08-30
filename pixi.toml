@@ -18,7 +18,16 @@ ros-jazzy-ros2-control = "*"       # hardware_interface, controller_manager
 ros-jazzy-ros2-controllers = "*"   # diff_drive_controller, joint_state_broadcaster
 ros-jazzy-robot-state-publisher = "*"
 ros-jazzy-xacro = "*"
+
+# ros2 CLI verbs. The base ros2cli ships only a few; `launch` and `run` are
+# needed to bring anything up, including picar_ros itself.
+ros-jazzy-ros2launch = "*"
+ros-jazzy-ros2run = "*"
+ros-jazzy-ros2pkg = "*"
 ros-jazzy-ament-cmake = "*"
+# Not used by picar itself. Needed only to build the ros2_control_demos
+# reference clone in the same environment; safe to drop if you stop using it.
+ros-jazzy-ros2-control-cmake = "*"
 
 # --- build tooling ---
 colcon-common-extensions = "*"
