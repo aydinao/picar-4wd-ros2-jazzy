@@ -1,0 +1,51 @@
+controller_manager:
+  ros__parameters:
+    # Rate at which read() -> controllers -> write() runs.
+    # Bounded above by how long four I2C register writes take on the Pi, and
+    # below by how coarse the encoders are: 20 slots/rev means very few counts
+    # per cycle at low speed, so a faster loop gives a noisier velocity.
+    # Measure both before changing this (questions 16 and 20).
+    update_rate: 20  # Hz
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    picar_base_controller:
+      type: diff_drive_controller/DiffDriveController
+
+picar_base_controller:
+  ros__parameters:
+    # Skid-steer: four wheels, two per side, no steering joint.
+    left_wheel_names:  ["left_front_wheel_joint", "left_rear_wheel_joint"]
+    right_wheel_names: ["right_front_wheel_joint", "right_rear_wheel_joint"]
+
+    # MEASURE BOTH. A 5% error in wheel_radius is a 5% error in every
+    # distance the robot reports.
+    wheel_separation: 0.117
+    wheel_radius: 0.033
+
+    # Skid-steer turns by slipping, so the geometric track width under-predicts
+    # how far the robot actually rotates. This multiplier is the standard fudge:
+    # drive a commanded 360 deg turn, measure the real angle, and scale until
+    # they agree. It is a TUNED number, not a measured one.
+    wheel_separation_multiplier: 1.0
+    left_wheel_radius_multiplier: 1.0
+    right_wheel_radius_multiplier: 1.0
+
+    # We measure velocity (encoder pulse rate), not position, so odometry is
+    # integrated from velocity rather than differenced from position.
+    position_feedback: false
+    open_loop: false
+    enable_odom_tf: true
+
+    base_frame_id: base_link
+    odom_frame_id: odom
+
+    publish_rate: 50.0
+    cmd_vel_timeout: 0.5
+
+    # Odometry from a slipping skid-steer platform is far worse in yaw than in
+    # x. These say so, and matter once anything fuses this with an IMU.
+    #                    [x,    y,    z,    roll, pitch, yaw ]
+    pose_covariance_diagonal:  [0.01, 0.01, 1e6, 1e6, 1e6, 0.5]
+    twist_covariance_diagonal: [0.01, 0.01, 1e6, 1e6, 1e6, 0.5]
