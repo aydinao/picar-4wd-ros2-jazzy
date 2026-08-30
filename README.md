@@ -380,6 +380,43 @@ pixi run clean      # remove build/, install/, log/
 the "works on my machine" class of failure -- untracked files, missing
 submodules -- without waiting on GitHub.
 
+### While working on one package
+
+```bash
+# rebuild just one package, and show only the compiler errors
+pixi run build --packages-select picar_ros 2>&1 | grep -E "error:|warning:"
+
+# run only one package's tests
+pixi run test --packages-select picar_hw
+```
+
+### Running it
+
+```bash
+pixi shell                     # ROS on PATH
+source install/setup.bash      # re-run after every build
+
+ros2 launch picar_ros picar.launch.py use_mock_hardware:=true
+```
+
+In a second terminal (same `pixi shell` + `source install/setup.bash`):
+
+```bash
+ros2 control list_hardware_components    # is the plugin loaded and active?
+ros2 control list_hardware_interfaces    # which are [claimed]?
+ros2 control list_controllers            # are the controllers active?
+
+ros2 topic echo /joint_states
+ros2 topic pub --once /picar_base_controller/cmd_vel \
+  geometry_msgs/msg/TwistStamped '{twist: {linear: {x: 0.1}}}'
+```
+
+On the Pi, to move one wheel with no ROS involved at all:
+
+```bash
+install/picar_hw/lib/picar_hw/twitch 13 23 60 2
+```
+
 Note that pixi's `libgpiod` is **2.x**, while Ubuntu 24.04's system package is
 1.6.3. The driver targets the v2 API, so build inside pixi on both machines.
 

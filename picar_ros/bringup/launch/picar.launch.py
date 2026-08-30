@@ -3,6 +3,11 @@
 #   ros2 launch picar_ros picar.launch.py
 #   ros2 launch picar_ros picar.launch.py use_mock_hardware:=true   # no robot needed
 #
+# On a machine without the HAT, the real plugin fails in on_configure (it
+# cannot pulse the reset line) and controller_manager then aborts with
+# "Failed to set the initial state of the component". That is expected --
+# use use_mock_hardware:=true off-robot.
+#
 # Needs the HAT battery-powered and the MCU out of reset (see the repo README).
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, RegisterEventHandler

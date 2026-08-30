@@ -26,13 +26,26 @@
         <hardware>
           <plugin>picar_ros/PiCarSystemHardware</plugin>
 
-          <!-- I2C. Parse the address with base 0 so the 0x form works. -->
+          <!--
+            I2C. The address is parsed as a C integer literal (std::stoul with
+            base 0), so 0x14 and 20 both mean the same device. Written in hex
+            here because i2cdetect and every datasheet do.
+            hardware_interface's stoui* helpers cannot be used for this one:
+            they are base 10 and throw on the "0x" prefix.
+          -->
           <param name="i2c_bus">1</param>
           <param name="i2c_address">0x14</param>
           <param name="pwm_frequency_hz">50</param>
 
           <!-- GPIO character device. Correct for a Pi 4B; differs on Pi 5. -->
           <param name="gpio_chip">/dev/gpiochip0</param>
+
+          <!--
+            The HAT's MCU is held in reset until this line is pulsed LOW->HIGH.
+            SunFounder's pin.py maps its "D16" to BCM 21 - note the name does
+            NOT match the number. See the repo README, section 4.
+          -->
+          <param name="reset_gpio">21</param>
 
           <!--
             Two encoders for four wheels: one per side. Which physical pin is
