@@ -5,7 +5,10 @@
   <xacro:property name="prefix" value="$(arg prefix)"/>
   <xacro:arg name="use_mock_hardware" default="false"/>
 
-  <xacro:include filename="$(find picar_ros)/description/ros2_control/picar.ros2_control.xacro"/>
+  <!-- Relative rather than $(find picar_ros): resolves the same way in the
+       source tree and in share/picar_ros/description/, and needs no ament
+       index, which the test environment does not have. -->
+  <xacro:include filename="../ros2_control/picar.ros2_control.xacro"/>
 
   <!--
     Geometry. EVERY NUMBER HERE IS A PLACEHOLDER - measure the real robot.
