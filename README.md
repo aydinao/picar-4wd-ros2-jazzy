@@ -446,7 +446,6 @@ Note that pixi's `libgpiod` is **2.x**, while Ubuntu 24.04's system package is
 - `max_wheel_speed_rad_s` in the URDF is an unmeasured placeholder: commanded
   and actual speed will not agree until it is calibrated against a tape measure
 - Every dimension in the URDF is a placeholder; measure the robot
-- Which encoder is on which side is unverified
 - Servo and ADC (battery, line-follower) channels
 - Nothing stops the motors on `SIGKILL` or a lost battery
 

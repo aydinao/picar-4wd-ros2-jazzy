@@ -64,10 +64,23 @@
           <param name="reset_gpio">21</param>
 
           <!--
-            Two encoders for four wheels: one per side. Which physical pin is
-            which side is NOT established - speed.py uses Speed(25) and
-            Speed(4) without labelling them. VERIFY ON HARDWARE before trusting
-            odometry, by spinning one side and seeing which counter moves.
+            Two encoders for four wheels.
+
+            VERIFIED ON HARDWARE (encoder_probe + twitch, with a driven positive
+            control):
+
+              BCM 25 = LEFT side,  BCM 4 = RIGHT side.
+              Each disc turns with that side's REAR wheel ONLY.
+
+            Driving the left front motor for 3 s at 50% power produced ZERO
+            counts; driving the left rear in the same window produced 124. The
+            sides are not coupled, so the two FRONT joints have no measurement
+            behind them whatsoever.
+
+            encoder_side below therefore says which encoder is on the same side
+            as the joint, NOT that the encoder measures that joint. For the
+            front wheels it measures a different wheel entirely. What read()
+            does with that is an open modelling decision.
           -->
           <param name="left_encoder_gpio">25</param>
           <param name="right_encoder_gpio">4</param>
@@ -77,8 +90,16 @@
 
       <!--
         PWM channel and direction GPIO per wheel, recovered from SunFounder's
-        Python (P-name -> channel, D-name -> BCM via pin.py). The rear wheels
-        are mounted mirrored, hence reversed.
+        Python (P-name -> channel, D-name -> BCM via pin.py) and then CORRECTED
+        AGAINST THE ROBOT: the rear pair was swapped. Channel 8 / GPIO 13 drives
+        the RIGHT rear wheel and channel 9 / GPIO 20 the LEFT, the opposite of
+        what the Python implied. Verified with twitch, one motor at a time,
+        watching both the wheel and the encoder columns.
+
+        The rear wheels are mounted mirrored, hence reversed. Note that twitch
+        does NOT apply this flag: it builds a Motor with the default
+        is_reversed = false, so under twitch the rear wheels turn backwards.
+        That is expected and is what the flag corrects.
 
         NOTE: channels 12 and 13 share timer 3, and 8 and 9 share timer 2, so
         the four wheels sit on two timers and their PWM frequencies are not
@@ -105,8 +126,8 @@
       </joint>
 
       <joint name="${prefix}left_rear_wheel_joint">
-        <param name="pwm_channel">8</param>
-        <param name="dir_gpio">13</param>
+        <param name="pwm_channel">9</param>
+        <param name="dir_gpio">20</param>
         <param name="reversed">true</param>
         <param name="encoder_side">left</param>
         <command_interface name="velocity"/>
@@ -115,8 +136,8 @@
       </joint>
 
       <joint name="${prefix}right_rear_wheel_joint">
-        <param name="pwm_channel">9</param>
-        <param name="dir_gpio">20</param>
+        <param name="pwm_channel">8</param>
+        <param name="dir_gpio">13</param>
         <param name="reversed">true</param>
         <param name="encoder_side">right</param>
         <command_interface name="velocity"/>
