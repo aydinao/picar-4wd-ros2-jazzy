@@ -15,6 +15,9 @@ find_package(ament_cmake REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GPIOD REQUIRED IMPORTED_TARGET libgpiod)
 
+# Encoder runs its edge-counting loop on its own thread.
+find_package(Threads REQUIRED)
+
 # Vendored I2C wrapper lives at the repo root. Its own CMakeLists declares
 # cmake_minimum_required(VERSION 3.4), which CMake >= 4 refuses, so we compile
 # the two sources we use directly rather than add_subdirectory().
@@ -23,6 +26,7 @@ set(I2CPP_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../libs/I2CPP)
 add_library(picar_hw SHARED
   src/hat.cpp
   src/motor.cpp
+  src/encoder.cpp
   src/reset.cpp
   ${I2CPP_ROOT}/src/i2cpp/i2cpp.cpp
   ${I2CPP_ROOT}/src/i2cpp/device.cpp
@@ -33,12 +37,17 @@ target_include_directories(picar_hw PUBLIC
   $<BUILD_INTERFACE:${I2CPP_ROOT}/include>
   $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(picar_hw PUBLIC PkgConfig::GPIOD)
+target_link_libraries(picar_hw PUBLIC PkgConfig::GPIOD Threads::Threads)
 
 # Standalone smoke test: drive one wheel without ROS, controller_manager or a
 # URDF. The first thing to reach for when the robot misbehaves.
 add_executable(twitch tools/twitch.cpp)
 target_link_libraries(twitch PRIVATE picar_hw)
+
+# The other half of the same idea: read the encoders with nothing else running.
+# Establishes which encoder is on which side, which no code can determine.
+add_executable(encoder_probe tools/encoder_probe.cpp)
+target_link_libraries(encoder_probe PRIVATE picar_hw)
 
 # picar_hw's public hat.hpp includes <i2cpp/device.hpp>, so consumers need the
 # vendored headers too. This is a leaky abstraction -- a private dependency
@@ -52,7 +61,7 @@ install(TARGETS picar_hw
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
 )
-install(TARGETS twitch DESTINATION lib/${PROJECT_NAME})
+install(TARGETS twitch encoder_probe DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
