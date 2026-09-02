@@ -431,13 +431,24 @@ Note that pixi's `libgpiod` is **2.x**, while Ubuntu 24.04's system package is
 - Builds green as a `ros2_control` package on x86_64 and in CI
 - Full bring-up verified with mock hardware: `controller_manager` loads the
   component, `diff_drive_controller` claims all four wheel velocity commands
+- `write()`: the controller's rad/s command reaches the motors. Command
+  interface handles are resolved once in `on_configure`, so the control loop
+  never looks one up by name
+- Motors stop on `on_deactivate`, and are zeroed on `on_activate` -- the
+  "wheels spin forever" limitation is closed for every ordinary shutdown
+- `picar_hw::Encoder`: rising-edge counting on a background thread, exposing a
+  monotonic count and the kernel's timestamp for the last edge
 
 **Not yet**
-- `picar_system.cpp` lifecycle, `read()` and `write()` bodies -- the plugin
-  loads and activates, but does nothing
-- Encoder edge counting via libgpiod events
+- `read()` -- the encoder counter exists but nothing consumes it. Four joints
+  declare velocity state and only two sensors exist, so what each joint should
+  report is an open modelling decision, not a missing function
+- `max_wheel_speed_rad_s` in the URDF is an unmeasured placeholder: commanded
+  and actual speed will not agree until it is calibrated against a tape measure
 - Every dimension in the URDF is a placeholder; measure the robot
+- Which encoder is on which side is unverified
 - Servo and ADC (battery, line-follower) channels
+- Nothing stops the motors on `SIGKILL` or a lost battery
 
 **Gotcha:** the HAT must be battery-powered. Running the Pi from an external
 supply alone produces `OSError: [Errno 121] Remote I/O error` on motor commands.

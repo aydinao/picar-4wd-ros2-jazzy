@@ -21,7 +21,7 @@ CONTROLLERS = os.path.join(PKG, "bringup", "config", "picar_controllers.yaml")
 REQUIRED_HW_PARAMS = {
     "i2c_bus", "i2c_address", "pwm_frequency_hz", "gpio_chip",
     "reset_gpio", "left_encoder_gpio", "right_encoder_gpio",
-    "encoder_slots_per_rev",
+    "encoder_slots_per_rev", "max_wheel_speed_rad_s",
 }
 REQUIRED_JOINT_PARAMS = {"pwm_channel", "dir_gpio", "reversed", "encoder_side"}
 

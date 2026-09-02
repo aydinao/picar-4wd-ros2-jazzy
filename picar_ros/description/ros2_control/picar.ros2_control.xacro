@@ -37,6 +37,22 @@
           <param name="i2c_address">0x14</param>
           <param name="pwm_frequency_hz">50</param>
 
+          <!--
+            CALIBRATION, NOT GEOMETRY. The wheel velocity in rad/s that
+            corresponds to full motor power, used to scale the controller's
+            rad/s command onto the motor's -100..100 range.
+
+            PLACEHOLDER. There is no physics that gives this number: it depends
+            on the gearbox, the load and the battery's state of charge. Measure
+            it. Command a straight line at a known cmd_vel, time the robot over
+            a measured distance, and scale until the commanded and actual
+            speeds agree.
+
+            Too high and the robot creeps; too low and every command saturates
+            and the robot cannot be steered slowly.
+          -->
+          <param name="max_wheel_speed_rad_s">20.0</param>   <!-- MEASURE -->
+
           <!-- GPIO character device. Correct for a Pi 4B; differs on Pi 5. -->
           <param name="gpio_chip">/dev/gpiochip0</param>
 

@@ -5,11 +5,45 @@
 #include "picar_hw/reset.hpp"
 #include "rclcpp/rclcpp.hpp"
 
+#include <cmath>
 #include <stdexcept>
 #include <string>
 
 namespace picar_ros
 {
+
+namespace
+{
+
+/// Commanded wheel velocity (rad/s) -> the motor's -100..100 power scale.
+///
+/// Linear, with a single constant. There is no physics to appeal to here: duty
+/// cycle sets the average voltage across a brushed DC motor, and the speed that
+/// results depends on load, gearbox and battery charge. max_speed_rad_s is
+/// therefore a CALIBRATION value -- measured, never derived -- and this mapping
+/// is a first approximation to a curve that is not actually straight, least of
+/// all near zero where the motor does not turn at all.
+///
+/// Motor::set_power already owns the two things below this: the sign selects
+/// the direction pin, and non-zero magnitudes are remapped into the 50-100%
+/// band where the motor overcomes stiction.
+int8_t velocity_to_power(double velocity_rad_s, double max_speed_rad_s)
+{
+    // A NaN command must not reach the hardware. It would compare false against
+    // both clamps and cast to garbage.
+    if (!std::isfinite(velocity_rad_s)) {
+        return 0;
+    }
+
+    double duty = 100.0 * velocity_rad_s / max_speed_rad_s;
+
+    if (duty >  100.0) duty =  100.0;
+    if (duty < -100.0) duty = -100.0;
+
+    return static_cast<int8_t>(std::lround(duty));
+}
+
+}  // namespace
 
 hardware_interface::CallbackReturn PiCarSystemHardware::on_init(
     const hardware_interface::HardwareComponentInterfaceParams & params)
@@ -42,6 +76,17 @@ hardware_interface::CallbackReturn PiCarSystemHardware::on_init(
     i2c_address_ = static_cast<uint_fast8_t>(addr);
 
     pwm_frequency_hz_ = hardware_interface::stoui16(get_hardware_info().hardware_parameters.at("pwm_frequency_hz"));
+
+    // Divisor in velocity_to_power, so it must be positive and finite. Checked
+    // here rather than in the control loop, where there is nothing useful to do
+    // about it.
+    max_wheel_speed_rad_s_ = hardware_interface::stod(
+        get_hardware_info().hardware_parameters.at("max_wheel_speed_rad_s"));
+    if (!std::isfinite(max_wheel_speed_rad_s_) || max_wheel_speed_rad_s_ <= 0.0) {
+        throw std::invalid_argument(
+            "max_wheel_speed_rad_s must be finite and positive, got: " +
+            get_hardware_info().hardware_parameters.at("max_wheel_speed_rad_s"));
+    }
     gpio_chip_ = get_hardware_info().hardware_parameters.at("gpio_chip");
 
     left_encoder_gpio_ = hardware_interface::stoui8(get_hardware_info().hardware_parameters.at("left_encoder_gpio"));
@@ -127,6 +172,31 @@ hardware_interface::CallbackReturn PiCarSystemHardware::on_configure(
     {
         set_command(name, 0.0);
     }
+
+    // Resolve the command interface handles once, here, so write() never has to
+    // look one up by name. The by-name accessors build a string key and wait on
+    // the value; the installed hardware_component_interface.hpp documents them
+    // as not real-time safe. Same URDF order as wheels_ and motors_.
+    // The key format is prefix + "/" + interface, built in InterfaceDescription's
+    // constructor -- so "left_front_wheel_joint/velocity". Checked against the
+    // map first: this code only ever runs on the robot, and a mismatch here
+    // would otherwise surface as an opaque throw from inside the base class.
+    velocity_commands_.clear();
+    velocity_commands_.reserve(wheels_.size());
+    for (const auto & w : wheels_) {
+        const std::string interface_name = w.joint_name + "/velocity";
+        if (joint_command_interfaces_.find(interface_name) == joint_command_interfaces_.end()) {
+            RCLCPP_ERROR(get_logger(),
+                         "no command interface '%s' -- the URDF joint name and the "
+                         "ros2_control joint name disagree",
+                         interface_name.c_str());
+            hats_.clear();
+            motors_.clear();
+            velocity_commands_.clear();
+            return hardware_interface::CallbackReturn::ERROR;
+        }
+        velocity_commands_.push_back(get_command_interface_handle(interface_name));
+    }
     RCLCPP_INFO(get_logger(), "Configured %zu motors at %u Hz", motors_.size(),
                 static_cast<unsigned>(pwm_frequency_hz_));
     return hardware_interface::CallbackReturn::SUCCESS;
@@ -135,7 +205,10 @@ hardware_interface::CallbackReturn PiCarSystemHardware::on_configure(
 hardware_interface::CallbackReturn PiCarSystemHardware::on_activate(
     const rclcpp_lifecycle::State & /*previous_state*/)
 {
-    // TODO: drive the motors to zero before commands are accepted.
+    // Nothing may be turning at the instant commands start being honoured. The
+    // HAT keeps its last pulse-width across a deactivate/activate cycle, so
+    // without this a re-activated robot resumes at whatever it was doing.
+    stop_all_motors();
 
     // Command must match state on activation, or the robot lurches to
     // whatever stale value was sitting in the command interface.
@@ -151,13 +224,27 @@ hardware_interface::CallbackReturn PiCarSystemHardware::on_activate(
 hardware_interface::CallbackReturn PiCarSystemHardware::on_deactivate(
     const rclcpp_lifecycle::State & /*previous_state*/)
 {
-    // TODO: stop the motors by writing to the hardware directly.
+    // Stop the hardware, not the command interface. write() is not called again
+    // after deactivation, so a zeroed command would sit in memory while the
+    // wheels kept turning -- the "wheels spin forever" limitation the README
+    // has carried since June.
     //
-    // Zeroing a command interface is not sufficient: write() is no longer
-    // called once the component is deactivated, so nothing would carry the
-    // value out to the HAT. This is the documented "wheels spin forever"
-    // limitation in the README.
+    // Note what this still does not cover: SIGKILL, a lost battery, or the
+    // process being OOM-killed all bypass every lifecycle callback. Only a
+    // watchdog on the HAT itself would close that gap.
+    stop_all_motors();
+
+    RCLCPP_INFO(get_logger(), "Deactivated: all %zu motors stopped", motors_.size());
     return hardware_interface::CallbackReturn::SUCCESS;
+}
+
+void PiCarSystemHardware::stop_all_motors()
+{
+    for (auto & motor : motors_) {
+        if (motor) {
+            motor->set_power(0);
+        }
+    }
 }
 
 hardware_interface::return_type PiCarSystemHardware::read(
@@ -178,12 +265,26 @@ hardware_interface::return_type PiCarSystemHardware::read(
 hardware_interface::return_type PiCarSystemHardware::write(
     const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
 {
-    // TODO: read commands with get_command("<joint>/velocity"), convert
-    // rad/s to a duty cycle and a direction, and drive the HAT.
-    //
-    // Real-time path, and it performs I2C: four register writes per cycle at
-    // the controller_manager update rate. That cost needs measuring against
-    // the control period rather than assuming it fits.
+    // REAL-TIME PATH. No allocation, no logging, no locks. The one unavoidable
+    // cost is the I2C traffic: Motor::set_power writes one three-byte pulse
+    // width register per wheel, so four register writes per cycle at 20 Hz.
+    // That is still an assumption -- it has not been timed on the Pi against
+    // the 50 ms period.
+    for (std::size_t i = 0; i < motors_.size(); ++i) {
+        double command_rad_s = 0.0;
+
+        // Handle overload with wait_until_get = false: never block the control
+        // loop waiting for a value to settle. A false return means the command
+        // was not readable this cycle, which is not an error -- the motor keeps
+        // its previous setting until the next one arrives.
+        if (!get_command(velocity_commands_[i], command_rad_s, false)) {
+            continue;
+        }
+
+        motors_[i]->set_power(
+            velocity_to_power(command_rad_s, max_wheel_speed_rad_s_));
+    }
+
     return hardware_interface::return_type::OK;
 }
 

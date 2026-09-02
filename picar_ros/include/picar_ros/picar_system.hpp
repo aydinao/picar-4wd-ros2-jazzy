@@ -8,6 +8,7 @@
 #include "picar_hw/hat.hpp"
 #include "picar_hw/motor.hpp"
 
+#include "hardware_interface/handle.hpp"
 #include "hardware_interface/system_interface.hpp"
 #include "hardware_interface/types/hardware_component_interface_params.hpp"
 #include "hardware_interface/types/hardware_interface_return_values.hpp"
@@ -66,6 +67,14 @@ public:
         const rclcpp::Time & time, const rclcpp::Duration & period) override;
 
 private:
+    /// Drive every motor to zero through the HAT.
+    ///
+    /// Used by on_activate and on_deactivate. Both need the hardware itself
+    /// stopped, which zeroing a command interface does not achieve: write() is
+    /// not called before activation or after deactivation, so nothing would
+    /// carry the value out to the chip.
+    void stop_all_motors();
+
     // Configuration parsed from the URDF in on_init(). Hardware handles are
     // not held yet: the HAT and Motor objects are constructed in on_configure()
     // once they exist.
@@ -77,6 +86,13 @@ private:
     uint8_t right_encoder_gpio_;
     uint8_t encoder_slots_per_rev_;
     uint8_t reset_gpio_;
+
+    /// Wheel velocity that corresponds to full power, in rad/s.
+    ///
+    /// CALIBRATION CONSTANT, not physics: it is the scale factor between the
+    /// controller's rad/s and the motor's -100..100. Measured by driving the
+    /// robot and timing it over a known distance; see the URDF param.
+    double max_wheel_speed_rad_s_ = 0.0;
 
     /// One entry per <joint>, in the order the URDF declares them.
     std::vector<WheelConfig> wheels_;
@@ -90,6 +106,15 @@ private:
     // touches it in its destructor.
     std::vector<std::unique_ptr<picar_hw::Hat>> hats_;
     std::vector<std::unique_ptr<picar_hw::Motor>> motors_;
+
+    /// Command interface handles, in the same URDF order as wheels_ and
+    /// motors_, resolved once in on_configure().
+    ///
+    /// write() must not use the by-name get_command(): that overload looks the
+    /// interface up by string and waits for the value to settle, and the
+    /// installed header documents it as NOT real-time safe. Resolving the
+    /// handle once and reading through it every cycle is the real-time path.
+    std::vector<hardware_interface::CommandInterface::SharedPtr> velocity_commands_;
 };
 
 }  // namespace picar_ros
