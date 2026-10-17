@@ -59,7 +59,7 @@
           <!--
             The HAT's MCU is held in reset until this line is pulsed LOW->HIGH.
             SunFounder's pin.py maps its "D16" to BCM 21 - note the name does
-            NOT match the number. See the repo README, section 4.
+            NOT match the number. See the repo README, "HAT bring-up on Ubuntu".
           -->
           <param name="reset_gpio">21</param>
 

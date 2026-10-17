@@ -12,8 +12,7 @@ namespace picar_hw
 /// HIGH; until that happens the chip does not acknowledge on the I2C bus at
 /// all and i2cdetect shows an empty grid. SunFounder's stack does this during
 /// startup on Raspberry Pi OS, so on any other distribution it must be done
-/// explicitly. See the repo README, "The actual blocker: the MCU is held in
-/// reset".
+/// explicitly. See the repo README, "HAT bring-up on Ubuntu".
 ///
 /// @param chip_path  GPIO character device, e.g. /dev/gpiochip0
 /// @param line       BCM line number of the reset pin (GPIO21 on this board)
