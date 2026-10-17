@@ -5,7 +5,8 @@
 //
 // Channel/GPIO pairs for the PiCar-4WD (see the repo README):
 //   left front  13 / 23      right front 12 / 24
-//   left rear    8 / 13      right rear   9 / 20
+//   left rear    9 / 20      right rear   8 / 13
+// twitch does not apply the URDF's `reversed` flag, so rear wheels turn backwards.
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>

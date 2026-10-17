@@ -58,15 +58,16 @@ fail with `OSError: [Errno 121] Remote I/O error`.
 
 ## Hardware facts
 
-Taken from SunFounder's `picar-4wd` Python source and checked on the hardware;
-there is no public schematic.
+Derived from SunFounder's `picar-4wd` Python source, then verified wheel by
+wheel with `twitch` and `encoder_probe` (the rear pair is swapped relative to
+the Python); there is no public schematic.
 
 | Wheel | PWM channel | Direction GPIO (BCM) |
 |---|---|---|
 | left front | 13 | 23 |
 | right front | 12 | 24 |
-| left rear | 8 | 13 |
-| right rear | 9 | 20 |
+| left rear | 9 | 20 |
+| right rear | 8 | 13 |
 
 - **MCU:** STM32F103 at I2C `0x14`. Its firmware exposes `TIMx->PSC/ARR/CCRy`,
   so `f = 72 MHz / ((PSC+1)(ARR+1))` (RM0008).
@@ -74,9 +75,9 @@ there is no public schematic.
   one wheel's frequency changes its sibling's.
 - **Drive:** skid-steer, not Ackermann. Four motors → four joints, two per side
   for `diff_drive_controller`.
-- **Encoders:** two (BCM 25 and 4), one per side, 20 slots, single channel —
-  magnitude only. Direction comes from the commanded direction pin. Which pin
-  is which side is unverified (`encoder_probe`).
+- **Encoders:** two, 20 slots, single channel (magnitude only). BCM 25 = left,
+  BCM 4 = right, and each turns with its side's **rear** wheel only — the front
+  wheels are unmeasured. Direction comes from the commanded direction pin.
 - **Wheel radius:** ~3.3 cm, unmeasured. SunFounder labels its speed in mm/s;
   the label is wrong.
 
@@ -88,8 +89,8 @@ hardware · plugin builds in CI and activates with mock hardware ·
 `picar_hw::Encoder` counts edges.
 
 **Not yet:**
-- `read()` — four joints declare velocity state, two sensors exist; open
-  modelling decision.
+- `read()` — four joints declare velocity state, two sensors exist (rear
+  wheels only); open modelling decision.
 - `max_wheel_speed_rad_s` and all URDF dimensions are placeholders.
 - Servo and ADC channels.
 - Nothing stops the motors on `SIGKILL` or battery loss.
