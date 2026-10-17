@@ -37,12 +37,12 @@ pkg-config = "*"
 compilers = "*"
 
 # --- hardware ---
-# WARNING: the driver uses the libgpiod *v1* API (gpiod_chip_open_by_name,
-# gpiod_line_request_output). Ubuntu 24.04 ships 1.6.3, but conda-forge may
-# resolve to 2.x, where those symbols do not exist. After `pixi install`, run
+# The driver targets the libgpiod *v2* API (gpiod_chip_open, line settings +
+# line config + request config, gpiod_line_request_*). Ubuntu 24.04's system
+# package is 1.6.3, where those symbols do not exist, so build inside pixi on
+# both machines. To check what resolved:
 #   pixi run -- pkg-config --modversion libgpiod
-# and if it reports 2.x, pin this to "<2" or drop it and use the system lib.
-libgpiod = "*"
+libgpiod = ">=2"
 
 [tasks]
 build = "colcon build --symlink-install --event-handlers console_direct+"
