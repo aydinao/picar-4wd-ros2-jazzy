@@ -20,9 +20,9 @@ namespace picar_hw
 /// @param settle     how long to wait after releasing, before using the bus
 /// @returns false if the chip or line could not be claimed
 bool pulse_reset(
-    const std::string & chip_path,
-    unsigned int line,
-    std::chrono::milliseconds low_time = std::chrono::milliseconds(100),
-    std::chrono::milliseconds settle = std::chrono::milliseconds(500));
+  const std::string & chip_path,
+  unsigned int line,
+  std::chrono::milliseconds low_time = std::chrono::milliseconds(100),
+  std::chrono::milliseconds settle = std::chrono::milliseconds(500));
 
 }  // namespace picar_hw

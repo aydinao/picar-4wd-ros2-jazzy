@@ -44,10 +44,17 @@ compilers = "*"
 #   pixi run -- pkg-config --modversion libgpiod
 libgpiod = ">=2"
 
+# --- lint ---
+# ROS 2 code style, run as tests by ament_lint_auto in each package.
+ros-jazzy-ament-lint-auto = ">=0.17.5,<0.18"
+ros-jazzy-ament-lint-common = ">=0.17.5,<0.18"
+
 [tasks]
 build = "colcon build --symlink-install --event-handlers console_direct+"
 test = { cmd = "colcon test --event-handlers console_direct+ --return-code-on-test-failure", depends-on = ["build"] }
 clean = "rm -rf build install log"
+# Reformat C++ to ROS 2 style; `pixi run test` fails on anything left over.
+format = "ament_uncrustify --reformat picar_hw picar_ros"
 # Build from a fresh clone of HEAD in a temp dir: only tracked files, exactly
 # what CI sees. Catches "works on my machine" bugs like referencing an
 # untracked directory. Run this before pushing.

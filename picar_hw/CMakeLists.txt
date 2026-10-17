@@ -64,6 +64,13 @@ install(TARGETS picar_hw
 install(TARGETS twitch encoder_probe DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
+  # ROS 2 style, via ament_lint_common. Copyright headers are not checked
+  # (by ament_copyright or cpplint) until a license header is chosen.
+  find_package(ament_lint_auto REQUIRED)
+  set(AMENT_LINT_AUTO_EXCLUDE ament_cmake_copyright ament_cmake_cpplint)
+  ament_lint_auto_find_test_dependencies()
+  ament_cpplint(FILTERS "-legal/copyright")
+
   find_package(ament_cmake_gtest REQUIRED)
   ament_add_gtest(test_hat test/test_hat.cpp)
   target_include_directories(test_hat PRIVATE test)
