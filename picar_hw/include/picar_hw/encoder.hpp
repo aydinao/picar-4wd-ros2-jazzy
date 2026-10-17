@@ -32,53 +32,53 @@ namespace picar_hw
 class Encoder
 {
 public:
-    /// @param chip_path GPIO character device, e.g. /dev/gpiochip0
-    /// @param line      BCM line number of the encoder pin
-    Encoder(const std::string & chip_path, unsigned int line);
-    ~Encoder();
+  /// @param chip_path GPIO character device, e.g. /dev/gpiochip0
+  /// @param line      BCM line number of the encoder pin
+  Encoder(const std::string & chip_path, unsigned int line);
+  ~Encoder();
 
-    // Owns a line request, an event buffer and a running thread.
-    Encoder(const Encoder &) = delete;
-    Encoder & operator=(const Encoder &) = delete;
-    Encoder(Encoder &&) = delete;
-    Encoder & operator=(Encoder &&) = delete;
+  // Owns a line request, an event buffer and a running thread.
+  Encoder(const Encoder &) = delete;
+  Encoder & operator=(const Encoder &) = delete;
+  Encoder(Encoder &&) = delete;
+  Encoder & operator=(Encoder &&) = delete;
 
-    /// True while the line is claimed and the counting thread is healthy.
-    /// Goes false if the event wait fails, so a dead counter is visible to the
-    /// caller rather than silently reporting a frozen count.
-    bool ok() const
-    {
-        return request_ != nullptr && !faulted_.load(std::memory_order_relaxed);
-    }
+  /// True while the line is claimed and the counting thread is healthy.
+  /// Goes false if the event wait fails, so a dead counter is visible to the
+  /// caller rather than silently reporting a frozen count.
+  bool ok() const
+  {
+    return request_ != nullptr && !faulted_.load(std::memory_order_relaxed);
+  }
 
-    /// Rising edges seen since construction. Real-time safe.
-    uint64_t count() const { return count_.load(std::memory_order_relaxed); }
+  /// Rising edges seen since construction. Real-time safe.
+  uint64_t count() const {return count_.load(std::memory_order_relaxed);}
 
-    /// CLOCK_MONOTONIC timestamp of the most recent edge, in nanoseconds, as
-    /// recorded by the kernel at interrupt time. Zero until the first edge.
-    /// Real-time safe.
-    ///
-    /// This is a better time base than the control loop's own period: it is
-    /// taken when the slot actually passed, not when the loop got around to
-    /// looking.
-    uint64_t last_event_ns() const
-    {
-        return last_event_ns_.load(std::memory_order_relaxed);
-    }
+  /// CLOCK_MONOTONIC timestamp of the most recent edge, in nanoseconds, as
+  /// recorded by the kernel at interrupt time. Zero until the first edge.
+  /// Real-time safe.
+  ///
+  /// This is a better time base than the control loop's own period: it is
+  /// taken when the slot actually passed, not when the loop got around to
+  /// looking.
+  uint64_t last_event_ns() const
+  {
+    return last_event_ns_.load(std::memory_order_relaxed);
+  }
 
 private:
-    void run();
+  void run();
 
-    gpiod_chip * chip_ = nullptr;
-    gpiod_line_request * request_ = nullptr;
-    gpiod_edge_event_buffer * buffer_ = nullptr;
-    unsigned int line_;
+  gpiod_chip * chip_ = nullptr;
+  gpiod_line_request * request_ = nullptr;
+  gpiod_edge_event_buffer * buffer_ = nullptr;
+  unsigned int line_;
 
-    std::atomic<uint64_t> count_{0};
-    std::atomic<uint64_t> last_event_ns_{0};
-    std::atomic<bool> running_{false};
-    std::atomic<bool> faulted_{false};
-    std::thread thread_;
+  std::atomic<uint64_t> count_{0};
+  std::atomic<uint64_t> last_event_ns_{0};
+  std::atomic<bool> running_{false};
+  std::atomic<bool> faulted_{false};
+  std::thread thread_;
 };
 
 }  // namespace picar_hw

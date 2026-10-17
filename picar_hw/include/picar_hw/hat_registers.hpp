@@ -47,7 +47,7 @@ inline constexpr std::uint8_t kAltAddress = 0x15;
 /// of this robot sit on only two timers, and PSC/ARR writes are shared.
 constexpr std::uint8_t timer_for_channel(std::uint8_t channel)
 {
-    return static_cast<std::uint8_t>(channel / kChannelsPerTimer);
+  return static_cast<std::uint8_t>(channel / kChannelsPerTimer);
 }
 
 /// Registers are written big-endian as [reg, value_high, value_low].

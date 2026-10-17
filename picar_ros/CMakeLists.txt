@@ -44,6 +44,13 @@ install(TARGETS picar_ros
 )
 
 if(BUILD_TESTING)
+  # ROS 2 style, via ament_lint_common. Copyright headers are not checked
+  # (by ament_copyright or cpplint) until a license header is chosen.
+  find_package(ament_lint_auto REQUIRED)
+  set(AMENT_LINT_AUTO_EXCLUDE ament_cmake_copyright ament_cmake_cpplint)
+  ament_lint_auto_find_test_dependencies()
+  ament_cpplint(FILTERS "-legal/copyright")
+
   find_package(ament_cmake_pytest REQUIRED)
   # launch_testing_ros 0.26 registers a pytest hook that launch_testing 3.4 no
   # longer declares, so pytest aborts during collection before any test runs.
