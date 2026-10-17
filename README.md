@@ -22,6 +22,7 @@ pixi run build        # colcon build; add --packages-select <pkg> for one
 pixi run test         # fails on red
 pixi run ci-local     # build a fresh clone of HEAD, as CI sees it (commit first)
 pixi run clean
+pixi run format     # ROS 2 style; the linters run as part of `test`
 ```
 
 ```bash
