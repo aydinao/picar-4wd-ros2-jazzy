@@ -1,22 +1,22 @@
-#include <cstdint>
-#include <cstdlib>
-#include <cstdio>
+#include "picar_hw/motor.hpp"
+
 #include <gpiod.h>
 
-#include "picar_hw/motor.hpp"
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 
 namespace picar_hw {
 
     namespace {
-        // libgpiod v2 takes a device path, not a chip name as v1 did.
-        constexpr const char * kGpioChipPath = "/dev/gpiochip0";
         constexpr const char * kConsumer = "picar_hw";
     }
 
-    Motor::Motor(Hat& pwm_pin, uint8_t dir_pin, bool is_reversed)
-        : pwm_pin_(pwm_pin), dir_pin_(dir_pin), is_reversed_(is_reversed)
+    Motor::Motor(Hat & pwm, const std::string & chip_path, unsigned int dir_line,
+                 bool is_reversed)
+        : pwm_(pwm), dir_line_(dir_line), is_reversed_(is_reversed)
     {
-        chip_ = gpiod_chip_open(kGpioChipPath);
+        chip_ = gpiod_chip_open(chip_path.c_str());
         if (!chip_) {
             std::perror("gpiod_chip_open");
             return;
@@ -33,7 +33,7 @@ namespace picar_hw {
             gpiod_line_settings_set_direction(settings, GPIOD_LINE_DIRECTION_OUTPUT);
             gpiod_line_settings_set_output_value(settings, GPIOD_LINE_VALUE_INACTIVE);
 
-            const unsigned int offset = dir_pin_;
+            const unsigned int offset = dir_line_;
             if (gpiod_line_config_add_line_settings(line_cfg, &offset, 1, settings) == 0) {
                 gpiod_request_config_set_consumer(req_cfg, kConsumer);
                 dir_request_ = gpiod_chip_request_lines(chip_, req_cfg, line_cfg);
@@ -52,7 +52,7 @@ namespace picar_hw {
     }
 
     Motor::~Motor() {
-        pwm_pin_.set_duty_cycle(0.0f);
+        pwm_.set_duty_cycle(0.0f);
         if (dir_request_) gpiod_line_request_release(dir_request_);
         if (chip_) gpiod_chip_close(chip_);
     }
@@ -61,7 +61,7 @@ namespace picar_hw {
         if (power > 100) power = 100;
         if (power < -100) power = -100;
 
-        int8_t direction = (power < 0) ? 1 : 0;
+        bool direction = power < 0;
         uint8_t abs_power = static_cast<uint8_t>(std::abs(power));
         if (abs_power != 0)
         {
@@ -75,10 +75,10 @@ namespace picar_hw {
 
         if (dir_request_) {
             gpiod_line_request_set_value(
-                dir_request_, dir_pin_,
+                dir_request_, dir_line_,
                 direction ? GPIOD_LINE_VALUE_ACTIVE : GPIOD_LINE_VALUE_INACTIVE);
         }
-        pwm_pin_.set_duty_cycle(static_cast<float>(abs_power));
+        pwm_.set_duty_cycle(static_cast<float>(abs_power));
     }
 
 }

@@ -30,7 +30,7 @@ int main(int argc, char ** argv)
     const double seconds = std::atof(argv[4]);
 
     picar_hw::Hat pwm(1, picar_hw::hat::kDefaultAddress, channel);
-    picar_hw::Motor motor(pwm, dir_gpio);
+    picar_hw::Motor motor(pwm, "/dev/gpiochip0", dir_gpio);
 
     if (!motor.ok()) {
         std::fprintf(stderr, "failed to claim GPIO %u -- is another process holding it?\n",

@@ -9,6 +9,10 @@
 
 namespace picar_hw{
 
+    namespace {
+        constexpr int kClock = static_cast<int>(hat::kClockHz);
+    }
+
     // The filename form is the real constructor; the bus form delegates to it,
     // because bus N *is* /dev/i2c-N (see I2CPP::open_adapter).
     Hat::Hat(std::string filename, uint_fast8_t address, uint8_t channel)
@@ -33,7 +37,7 @@ namespace picar_hw{
             prescaler = 1;
         }
         prescaler = prescaler - 1;          
-        uint8_t reg = static_cast<uint8_t>(REG_PSC + timer_);
+        uint8_t reg = static_cast<uint8_t>(hat::kRegPrescalerBase + timer_);
         
         uint_fast8_t buffer[3] = {
             reg,
@@ -48,9 +52,9 @@ namespace picar_hw{
         if (!period) {
             period = 999;
         }
-        period_ = static_cast<uint16_t>(period - 1);;
+        period_ = static_cast<uint16_t>(period - 1);
 
-        uint8_t reg = static_cast<uint8_t>(REG_ARR + timer_);
+        uint8_t reg = static_cast<uint8_t>(hat::kRegAutoReloadBase + timer_);
         uint_fast8_t buffer[3] = {
             reg,
             static_cast<uint_fast8_t>(period_ >> 8),
@@ -61,10 +65,7 @@ namespace picar_hw{
     }
 
     void Hat::set_pulse_width(uint16_t pulse_width){
-        if (!pulse_width){
-            pulse_width = 0;
-        }
-        uint8_t reg = static_cast<uint8_t>(REG_CHN + channel_);
+        uint8_t reg = static_cast<uint8_t>(hat::kRegChannelBase + channel_);
                 uint_fast8_t buffer[3] = {
             reg,
             static_cast<uint_fast8_t>(pulse_width >> 8),
@@ -74,16 +75,16 @@ namespace picar_hw{
     }
 
     /**
-     * If CLOCK / frequency were always a perfect square 
+     * If kClock / frequency were always a perfect square 
      * and always divided evenly into integers,
      * the square root would give the exact answer every time.
      * 
      * sqrt returns a float, and even when the sqrt is an integer,
-     * CLOCK / frequency might not divide evenly.
+     * kClock / frequency might not divide evenly.
      * 
      * Given that it can't always be exact, finding 
      * the integer pair for the presecaler (PSC) and the
-     * period (ARR) whose product is closest to CLOCK / frequency
+     * period (ARR) whose product is closest to kClock / frequency
      * gives the best accuracy here.
      */
     void Hat::set_frequency(uint16_t frequency) 
@@ -93,7 +94,7 @@ namespace picar_hw{
             frequency = 50;
         }
     
-        int start = std::sqrt(CLOCK / frequency);
+        int start = std::sqrt(kClock / frequency);
         start = start - 5; 
         // prevent negative value
         if (start <= 0) 
@@ -105,9 +106,9 @@ namespace picar_hw{
 
         for (int prescaler = start; prescaler < start + 10; prescaler++)
         {
-            int val = CLOCK / frequency / prescaler;
+            int val = kClock / frequency / prescaler;
             candidates.push_back({prescaler, val});
-            accuracy.push_back(std::abs(frequency - CLOCK / prescaler / val));
+            accuracy.push_back(std::abs(frequency - kClock / prescaler / val));
         }
         
         std::vector<int>::iterator result = std::min_element(std::begin(accuracy), std::end(accuracy));

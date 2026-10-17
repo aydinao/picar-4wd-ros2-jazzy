@@ -4,7 +4,7 @@ controller_manager:
     # Bounded above by how long four I2C register writes take on the Pi, and
     # below by how coarse the encoders are: 20 slots/rev means very few counts
     # per cycle at low speed, so a faster loop gives a noisier velocity.
-    # Measure both before changing this (questions 16 and 20).
+    # Measure both before changing this.
     update_rate: 20  # Hz
 
     joint_state_broadcaster:

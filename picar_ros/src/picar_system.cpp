@@ -152,7 +152,7 @@ hardware_interface::CallbackReturn PiCarSystemHardware::on_configure(
             static_cast<int>(i2c_bus_), i2c_address_, w.pwm_channel);
         hat->set_frequency(pwm_frequency_hz_);
 
-        auto motor = std::make_unique<picar_hw::Motor>(*hat, w.dir_gpio, w.reversed);
+        auto motor = std::make_unique<picar_hw::Motor>(*hat, gpio_chip_, w.dir_gpio, w.reversed);
         if (!motor->ok()) {
             RCLCPP_ERROR(get_logger(), "joint '%s': could not claim GPIO %u",
                          w.joint_name.c_str(), static_cast<unsigned>(w.dir_gpio));
@@ -226,8 +226,7 @@ hardware_interface::CallbackReturn PiCarSystemHardware::on_deactivate(
 {
     // Stop the hardware, not the command interface. write() is not called again
     // after deactivation, so a zeroed command would sit in memory while the
-    // wheels kept turning -- the "wheels spin forever" limitation the README
-    // has carried since June.
+    // wheels kept turning.
     //
     // Note what this still does not cover: SIGKILL, a lost battery, or the
     // process being OOM-killed all bypass every lifecycle callback. Only a
