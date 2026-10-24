@@ -10,10 +10,12 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <exception>
 #include <thread>
 
 #include "picar_hw/hat.hpp"
 #include "picar_hw/hat_registers.hpp"
+#include "picar_hw/i2c_bus.hpp"
 #include "picar_hw/motor.hpp"
 
 int main(int argc, char ** argv)
@@ -30,24 +32,29 @@ int main(int argc, char ** argv)
   const auto power = static_cast<std::int8_t>(std::atoi(argv[3]));
   const double seconds = std::atof(argv[4]);
 
-  picar_hw::Hat pwm(1, picar_hw::hat::kDefaultAddress, channel);
-  picar_hw::Motor motor(pwm, "/dev/gpiochip0", dir_gpio);
+  try {
+    picar_hw::LinuxI2cBus bus(1, picar_hw::hat::kDefaultAddress);
+    picar_hw::Hat hat(bus, 50);
+    picar_hw::Motor motor(hat, channel, "/dev/gpiochip0", dir_gpio);
 
-  if (!motor.ok()) {
-    std::fprintf(
-      stderr, "failed to claim GPIO %u -- is another process holding it?\n",
-      static_cast<unsigned>(dir_gpio));
+    if (!motor.ok()) {
+      std::fprintf(
+        stderr, "failed to claim GPIO %u -- is another process holding it?\n",
+        static_cast<unsigned>(dir_gpio));
+      return 1;
+    }
+
+    std::printf(
+      "channel %u, gpio %u, power %d, %.2fs\n",
+      static_cast<unsigned>(channel), static_cast<unsigned>(dir_gpio),
+      static_cast<int>(power), seconds);
+
+    motor.set_power(power);
+    std::this_thread::sleep_for(std::chrono::duration<double>(seconds));
+    motor.set_power(0);
+  } catch (const std::exception & e) {
+    std::fprintf(stderr, "twitch: %s\n", e.what());
     return 1;
   }
-
-  pwm.set_frequency(50);
-  std::printf(
-    "channel %u, gpio %u, power %d, %.2fs\n",
-    static_cast<unsigned>(channel), static_cast<unsigned>(dir_gpio),
-    static_cast<int>(power), seconds);
-
-  motor.set_power(power);
-  std::this_thread::sleep_for(std::chrono::duration<double>(seconds));
-  motor.set_power(0);
   return 0;
 }

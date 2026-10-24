@@ -1,10 +1,12 @@
 #include "picar_ros/picar_system.hpp"
 
 #include <cmath>
+#include <exception>
 #include <stdexcept>
 #include <string>
 
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
+#include "picar_hw/hat_registers.hpp"
 #include "picar_hw/reset.hpp"
 #include "pluginlib/class_list_macros.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -113,10 +115,17 @@ hardware_interface::CallbackReturn PiCarSystemHardware::on_init(
               "', expected \"left\" or \"right\"");
     }
 
+    const uint8_t pwm_channel = hardware_interface::stoui8(p.at("pwm_channel"));
+    if (picar_hw::hat::timer_for_channel(pwm_channel) >= picar_hw::hat::kTimerCount) {
+      throw std::out_of_range(
+              "joint '" + joint.name + "' has pwm_channel " + p.at("pwm_channel") +
+              ", which is on no HAT timer");
+    }
+
     wheels_.push_back(
       WheelConfig{
         joint.name,
-        hardware_interface::stoui8(p.at("pwm_channel")),
+        pwm_channel,
         hardware_interface::stoui8(p.at("dir_gpio")),
         hardware_interface::parse_bool(p.at("reversed")),
         side == "left",
@@ -142,35 +151,31 @@ hardware_interface::CallbackReturn PiCarSystemHardware::on_configure(
     return hardware_interface::CallbackReturn::ERROR;
   }
 
-  // One Hat per wheel. The HAT is a single chip, but Hat models one PWM
-  // channel, so four objects address four channels on the same device --
-  // i2cpp shares one file descriptor between them.
-  //
-  // This is only safe because every wheel runs at the SAME frequency:
-  // channels 12/13 share timer 3 and 8/9 share timer 2, and each Hat caches
-  // its own period. Give two wheels on one timer different frequencies and
-  // the second silently changes the first. See picar_hw/README.md.
-  hats_.clear();
-  motors_.clear();
-  hats_.reserve(wheels_.size());
+  release_hardware();
+
+  // One bus and one Hat for the whole HAT; every Motor drives its channel
+  // through it. Hat's constructor sets every timer to pwm_frequency_hz_.
+  try {
+    bus_ = std::make_unique<picar_hw::LinuxI2cBus>(
+      static_cast<int>(i2c_bus_), static_cast<std::uint8_t>(i2c_address_));
+    hat_ = std::make_unique<picar_hw::Hat>(*bus_, pwm_frequency_hz_);
+  } catch (const std::exception & e) {
+    RCLCPP_ERROR(get_logger(), "could not set up the HAT: %s", e.what());
+    release_hardware();
+    return hardware_interface::CallbackReturn::ERROR;
+  }
+
   motors_.reserve(wheels_.size());
-
   for (const auto & w : wheels_) {
-    auto hat = std::make_unique<picar_hw::Hat>(
-      static_cast<int>(i2c_bus_), i2c_address_, w.pwm_channel);
-    hat->set_frequency(pwm_frequency_hz_);
-
-    auto motor = std::make_unique<picar_hw::Motor>(*hat, gpio_chip_, w.dir_gpio, w.reversed);
+    auto motor = std::make_unique<picar_hw::Motor>(
+      *hat_, w.pwm_channel, gpio_chip_, w.dir_gpio, w.reversed);
     if (!motor->ok()) {
       RCLCPP_ERROR(
         get_logger(), "joint '%s': could not claim GPIO %u",
         w.joint_name.c_str(), static_cast<unsigned>(w.dir_gpio));
-      hats_.clear();
-      motors_.clear();
+      release_hardware();
       return hardware_interface::CallbackReturn::ERROR;
     }
-
-    hats_.push_back(std::move(hat));
     motors_.push_back(std::move(motor));
   }
   for (const auto & [name, descr] : joint_state_interfaces_) {
@@ -198,8 +203,7 @@ hardware_interface::CallbackReturn PiCarSystemHardware::on_configure(
         "no command interface '%s' -- the URDF joint name and the "
         "ros2_control joint name disagree",
         interface_name.c_str());
-      hats_.clear();
-      motors_.clear();
+      release_hardware();
       velocity_commands_.clear();
       return hardware_interface::CallbackReturn::ERROR;
     }
@@ -217,7 +221,12 @@ hardware_interface::CallbackReturn PiCarSystemHardware::on_activate(
   // Nothing may be turning at the instant commands start being honoured. The
   // HAT keeps its last pulse-width across a deactivate/activate cycle, so
   // without this a re-activated robot resumes at whatever it was doing.
-  stop_all_motors();
+  try {
+    stop_all_motors();
+  } catch (const std::exception & e) {
+    RCLCPP_ERROR(get_logger(), "could not stop the motors: %s", e.what());
+    return hardware_interface::CallbackReturn::ERROR;
+  }
 
   // Command must match state on activation, or the robot lurches to
   // whatever stale value was sitting in the command interface.
@@ -239,7 +248,12 @@ hardware_interface::CallbackReturn PiCarSystemHardware::on_deactivate(
   // Note what this still does not cover: SIGKILL, a lost battery, or the
   // process being OOM-killed all bypass every lifecycle callback. Only a
   // watchdog on the HAT itself would close that gap.
-  stop_all_motors();
+  try {
+    stop_all_motors();
+  } catch (const std::exception & e) {
+    RCLCPP_ERROR(get_logger(), "could not stop the motors: %s", e.what());
+    return hardware_interface::CallbackReturn::ERROR;
+  }
 
   RCLCPP_INFO(get_logger(), "Deactivated: all %zu motors stopped", motors_.size());
   return hardware_interface::CallbackReturn::SUCCESS;
@@ -252,6 +266,13 @@ void PiCarSystemHardware::stop_all_motors()
       motor->set_power(0);
     }
   }
+}
+
+void PiCarSystemHardware::release_hardware()
+{
+  motors_.clear();
+  hat_.reset();
+  bus_.reset();
 }
 
 hardware_interface::return_type PiCarSystemHardware::read(
@@ -288,8 +309,15 @@ hardware_interface::return_type PiCarSystemHardware::write(
       continue;
     }
 
-    motors_[i]->set_power(
-      velocity_to_power(command_rad_s, max_wheel_speed_rad_s_));
+    // A failed I2C write leaves the real-time path anyway: report it and hand
+    // the failure to controller_manager rather than let it escape write().
+    try {
+      motors_[i]->set_power(
+        velocity_to_power(command_rad_s, max_wheel_speed_rad_s_));
+    } catch (const std::exception & e) {
+      RCLCPP_ERROR(get_logger(), "write failed: %s", e.what());
+      return hardware_interface::return_type::ERROR;
+    }
   }
 
   return hardware_interface::return_type::OK;

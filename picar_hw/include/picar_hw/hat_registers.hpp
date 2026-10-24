@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 // ---------------------------------------------------------------------------
@@ -37,6 +38,12 @@ inline constexpr std::uint32_t kClockHz = 72000000;
 
 /// Each timer drives four PWM channels. Channels sharing a timer share PSC and ARR.
 inline constexpr std::uint8_t kChannelsPerTimer = 4;
+
+/// Timers reachable through the register map: kRegPrescalerBase + 0..3.
+inline constexpr std::uint8_t kTimerCount = 4;
+
+/// PSC, ARR and the compare registers are 16 bits wide (RM0008).
+inline constexpr std::uint32_t kRegisterMax = 0xFFFF;
 
 /// I2C address the MCU answers on. Some board revisions use kAltAddress instead.
 inline constexpr std::uint8_t kDefaultAddress = 0x14;

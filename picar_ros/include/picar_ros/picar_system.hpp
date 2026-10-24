@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "picar_hw/hat.hpp"
+#include "picar_hw/i2c_bus.hpp"
 #include "picar_hw/motor.hpp"
 
 #include "hardware_interface/handle.hpp"
@@ -75,6 +76,9 @@ private:
   /// carry the value out to the chip.
   void stop_all_motors();
 
+  /// Destroy the hardware objects in dependency order: motors, HAT, bus.
+  void release_hardware();
+
   // Configuration parsed from the URDF in on_init(). Hardware handles are
   // not held yet: the HAT and Motor objects are constructed in on_configure()
   // once they exist.
@@ -97,14 +101,14 @@ private:
   /// One entry per <joint>, in the order the URDF declares them.
   std::vector<WheelConfig> wheels_;
 
-  // Hardware, created in on_configure(). Held by pointer because Motor owns
-  // a GPIO request and holds a Hat reference, so it is neither copyable nor
-  // movable and cannot live directly in a vector.
+  // Hardware, created in on_configure(). Held by pointer because none of the
+  // three is copyable or movable, and they do not exist until configured.
   //
   // DECLARATION ORDER IS LOAD-BEARING: members are destroyed in reverse
-  // order, so motors_ is torn down before hats_. A Motor holds a Hat& and
-  // touches it in its destructor.
-  std::vector<std::unique_ptr<picar_hw::Hat>> hats_;
+  // order, so motors_ goes first, then hat_, then bus_. A Motor holds a Hat&
+  // and writes through it in its destructor; the Hat holds the bus.
+  std::unique_ptr<picar_hw::LinuxI2cBus> bus_;
+  std::unique_ptr<picar_hw::Hat> hat_;
   std::vector<std::unique_ptr<picar_hw::Motor>> motors_;
 
   /// Command interface handles, in the same URDF order as wheels_ and

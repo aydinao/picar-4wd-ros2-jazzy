@@ -60,7 +60,7 @@ format = "ament_uncrustify --reformat picar_hw picar_ros"
 # untracked directory. Run this before pushing.
 ci-local = """
 rm -rf /tmp/picar-cicheck &&
-git clone --quiet --recurse-submodules . /tmp/picar-cicheck &&
+git clone --quiet . /tmp/picar-cicheck &&
 cd /tmp/picar-cicheck &&
 pixi run build &&
 echo 'CLEAN-CLONE BUILD OK'

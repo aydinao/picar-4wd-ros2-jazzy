@@ -18,23 +18,16 @@ pkg_check_modules(GPIOD REQUIRED IMPORTED_TARGET libgpiod)
 # Encoder runs its edge-counting loop on its own thread.
 find_package(Threads REQUIRED)
 
-# Vendored I2C wrapper lives at the repo root. Its own CMakeLists declares
-# cmake_minimum_required(VERSION 3.4), which CMake >= 4 refuses, so we compile
-# the two sources we use directly rather than add_subdirectory().
-set(I2CPP_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../libs/I2CPP)
-
 add_library(picar_hw SHARED
+  src/i2c_bus.cpp
   src/hat.cpp
   src/motor.cpp
   src/encoder.cpp
   src/reset.cpp
-  ${I2CPP_ROOT}/src/i2cpp/i2cpp.cpp
-  ${I2CPP_ROOT}/src/i2cpp/device.cpp
 )
 
 target_include_directories(picar_hw PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<BUILD_INTERFACE:${I2CPP_ROOT}/include>
   $<INSTALL_INTERFACE:include>
 )
 target_link_libraries(picar_hw PUBLIC PkgConfig::GPIOD Threads::Threads)
@@ -49,12 +42,7 @@ target_link_libraries(twitch PRIVATE picar_hw)
 add_executable(encoder_probe tools/encoder_probe.cpp)
 target_link_libraries(encoder_probe PRIVATE picar_hw)
 
-# picar_hw's public hat.hpp includes <i2cpp/device.hpp>, so consumers need the
-# vendored headers too. This is a leaky abstraction -- a private dependency
-# showing through a public header -- and the proper fix is to keep i2cpp out of
-# hat.hpp entirely. Until then, ship them.
 install(DIRECTORY include/ DESTINATION include)
-install(DIRECTORY ${I2CPP_ROOT}/include/ DESTINATION include)
 install(TARGETS picar_hw
   EXPORT export_picar_hw
   ARCHIVE DESTINATION lib

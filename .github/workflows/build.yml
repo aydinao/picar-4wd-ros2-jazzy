@@ -13,8 +13,6 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       # Same environment as local dev: RoboStack via pixi. No sudo, no apt.
       # pixi-version is pinned to the version that generated pixi.lock, so CI

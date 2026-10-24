@@ -2,30 +2,30 @@
 //
 // These assert on what goes ON THE WIRE, because those bytes are the entire
 // contract with the STM32. Expected values are derived from the STM32 timer
-// relationship
+// relationship (RM0008, general-purpose timers)
 //
-//     f = CLOCK / ((PSC_reg + 1) * (ARR_reg + 1))
+//     f = CLOCK / ((PSC_reg + 1) * (ARR_reg + 1))      duty = CCR / (ARR_reg + 1)
 //
-// and from the register map recovered from SunFounder's Python -- NOT by
-// running the driver and recording what it happened to emit. Where a test is
-// a pure regression lock on current behaviour, it says so.
+// and from the register map in hat_registers.hpp -- NOT by running the driver
+// and recording what it happened to emit. Where a test is a pure regression
+// lock on current behaviour, it says so.
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <stdexcept>
+#include <system_error>
 
+#include "fake_i2c_bus.hpp"
 #include "picar_hw/hat.hpp"
 #include "picar_hw/hat_registers.hpp"
-#include "temp_i2c_file.hpp"
 
 namespace hw = picar_hw::hat;
 
 namespace
 {
-constexpr std::uint8_t kAddr = hw::kDefaultAddress;
-
 /// Reconstruct the output frequency the chip would produce from the raw
 /// register values written. This is the physics, independent of how the
-/// driver searched for them.
+/// driver chose them.
 double frequency_from(std::uint16_t psc_reg, std::uint16_t arr_reg)
 {
   return static_cast<double>(hw::kClockHz) /
@@ -45,136 +45,214 @@ TEST(HatRegisters, TimerIsChannelDividedByFour)
   SUCCEED();
 }
 
-TEST(Hat, SetFrequencyWritesPrescalerThenPeriodOfTheChannelsTimer)
+TEST(Hat, ConstructorSetsPrescalerThenPeriodOfEveryTimer)
 {
-  TempI2cFile wire;
-  picar_hw::Hat hat(wire.path(), kAddr, /*channel=*/ 13);    // channel 13 -> timer 3
-  hat.set_frequency(50);
+  FakeI2cBus bus;
+  picar_hw::Hat hat(bus, 50);
 
-  const auto writes = decode(wire.bytes());
+  const auto writes = decode(bus);
+  ASSERT_EQ(writes.size(), 2u * hw::kTimerCount);
+  for (std::uint8_t t = 0; t < hw::kTimerCount; ++t) {
+    EXPECT_EQ(writes[2 * t].reg, hw::kRegPrescalerBase + t) << "timer " << int{t};
+    EXPECT_EQ(writes[2 * t + 1].reg, hw::kRegAutoReloadBase + t) << "timer " << int{t};
+  }
+}
+
+TEST(Hat, SetFrequencyWritesOnlyThatTimer)
+{
+  FakeI2cBus bus;
+  picar_hw::Hat hat(bus, 50);
+  bus.writes.clear();
+
+  hat.set_frequency(3, 200);
+
+  const auto writes = decode(bus);
   ASSERT_EQ(writes.size(), 2u);
   EXPECT_EQ(writes[0].reg, hw::kRegPrescalerBase + 3) << "PSC for timer 3 is 0x43";
   EXPECT_EQ(writes[1].reg, hw::kRegAutoReloadBase + 3) << "ARR for timer 3 is 0x47";
 }
 
-TEST(Hat, RearWheelChannelsAddressTimerTwo)
+TEST(Hat, RegisterValuesAreWrittenBigEndian)
 {
-  TempI2cFile wire;
-  picar_hw::Hat hat(wire.path(), kAddr, /*channel=*/ 8);     // channel 8 -> timer 2
-  hat.set_frequency(50);
+  FakeI2cBus bus;
+  picar_hw::Hat hat(bus, 50);
 
-  const auto writes = decode(wire.bytes());
-  ASSERT_EQ(writes.size(), 2u);
-  EXPECT_EQ(writes[0].reg, hw::kRegPrescalerBase + 2);
-  EXPECT_EQ(writes[1].reg, hw::kRegAutoReloadBase + 2);
+  // Timer 0's ARR at 50 Hz is 65453 = 0xFFAD: high byte first.
+  ASSERT_GE(bus.writes.size(), 2u);
+  const std::vector<std::uint8_t> expected{0x44, 0xFF, 0xAD};
+  EXPECT_EQ(bus.writes[1], expected);
 }
 
-// --- the contract: do the emitted values actually mean 50 Hz? ----------------
+// --- the contract: do the emitted values mean the requested frequency? -------
 
-TEST(Hat, SetFrequencyEmitsValuesThatProduceTheRequestedFrequency)
+TEST(Hat, EmittedRegistersProduceTheRequestedFrequency)
 {
-  for (const std::uint16_t requested : {50, 100, 200, 500, 1000}) {
-    TempI2cFile wire;
-    picar_hw::Hat hat(wire.path(), kAddr, 13);
-    hat.set_frequency(requested);
+  for (const std::uint32_t requested : {1u, 50u, 100u, 200u, 500u, 1000u, 20000u}) {
+    FakeI2cBus bus;
+    picar_hw::Hat hat(bus, requested);
 
-    const auto writes = decode(wire.bytes());
-    ASSERT_EQ(writes.size(), 2u) << "requested " << requested;
-
+    const auto writes = decode(bus);
+    ASSERT_GE(writes.size(), 2u) << "requested " << requested;
     const double actual = frequency_from(writes[0].value, writes[1].value);
     const double error = std::abs(actual - requested) / requested;
-    EXPECT_LT(error, 0.01) << "requested " << requested << " Hz, registers give "
-                           << actual << " Hz";
+    EXPECT_LT(error, 0.001) << "requested " << requested << " Hz, registers give "
+                            << actual << " Hz";
   }
 }
 
-TEST(Hat, RegisterValuesAreWrittenBigEndian)
+TEST(Hat, PrescalerIsTheSmallestThatLetsThePeriodFit)
 {
-  TempI2cFile wire;
-  picar_hw::Hat hat(wire.path(), kAddr, 13);
-  hat.set_frequency(50);
+  for (const std::uint32_t requested : {1u, 50u, 100u, 200u, 500u, 1000u, 20000u}) {
+    FakeI2cBus bus;
+    picar_hw::Hat hat(bus, requested);
 
-  const auto raw = wire.bytes();
-  ASSERT_EQ(raw.size(), 6u);
-  // 1194 = 0x04AA: high byte first.
-  EXPECT_EQ(raw[1], 0x04);
-  EXPECT_EQ(raw[2], 0xAA);
+    const auto writes = decode(bus);
+    ASSERT_GE(writes.size(), 2u);
+    const std::uint32_t psc = writes[0].value;
+    const std::uint32_t ticks = hw::kClockHz / requested;
+
+    EXPECT_LE(ticks / (psc + 1), hw::kRegisterMax) << requested << " Hz: period must fit";
+    if (psc > 0) {
+      EXPECT_GT(ticks / psc, hw::kRegisterMax)
+        << requested << " Hz: one prescaler step lower would also have fit";
+    }
+  }
 }
 
-// --- pulse width / duty cycle -----------------------------------------------
+TEST(Hat, PeriodLeavesRoomForFullDuty)
+{
+  FakeI2cBus bus;
+  picar_hw::Hat hat(bus, 50);
+
+  const auto writes = decode(bus);
+  ASSERT_GE(writes.size(), 2u);
+  EXPECT_LT(writes[1].value, hw::kRegisterMax) << "CCR = ARR + 1 must fit in 16 bits";
+}
+
+TEST(Hat, FrequencyOutsideTheRangeThrows)
+{
+  FakeI2cBus bus;
+  EXPECT_THROW(picar_hw::Hat(bus, 0), std::invalid_argument);
+  EXPECT_THROW(picar_hw::Hat(bus, picar_hw::Hat::kMaxFrequencyHz + 1), std::invalid_argument);
+  EXPECT_NO_THROW(picar_hw::Hat(bus, picar_hw::Hat::kMaxFrequencyHz));
+}
+
+TEST(Hat, UnknownTimerThrows)
+{
+  FakeI2cBus bus;
+  picar_hw::Hat hat(bus, 50);
+  EXPECT_THROW(hat.set_frequency(hw::kTimerCount, 50), std::out_of_range);
+}
+
+// --- duty cycle -------------------------------------------------------------
 
 TEST(Hat, SetDutyCycleWritesTheChannelsCompareRegister)
 {
-  TempI2cFile wire;
-  picar_hw::Hat hat(wire.path(), kAddr, /*channel=*/ 13);
-  hat.set_frequency(50);
-  hat.set_duty_cycle(50.0f);
+  FakeI2cBus bus;
+  picar_hw::Hat hat(bus, 50);
+  bus.writes.clear();
 
-  const auto writes = decode(wire.bytes());
-  ASSERT_EQ(writes.size(), 3u);
-  EXPECT_EQ(writes[2].reg, hw::kRegChannelBase + 13) << "compare register for P13 is 0x2D";
+  hat.set_duty_cycle(13, 50.0f);
+
+  const auto writes = decode(bus);
+  ASSERT_EQ(writes.size(), 1u);
+  EXPECT_EQ(writes[0].reg, hw::kRegChannelBase + 13) << "compare register for P13 is 0x2D";
 }
 
-TEST(Hat, DutyCycleIsAFractionOfTheCachedPeriod)
+TEST(Hat, FullDutyHoldsTheOutputHighForTheWholePeriod)
 {
-  TempI2cFile wire;
-  picar_hw::Hat hat(wire.path(), kAddr, 13);
-  hat.set_frequency(50);
-  hat.set_duty_cycle(50.0f);
+  FakeI2cBus bus;
+  picar_hw::Hat hat(bus, 50);
+  const std::uint16_t arr = decode(bus)[2 * 3 + 1].value;      // timer 3's ARR
+  bus.writes.clear();
 
-  const auto writes = decode(wire.bytes());
-  ASSERT_EQ(writes.size(), 3u);
-  const std::uint16_t arr = writes[1].value;        // period the driver cached
-  EXPECT_EQ(writes[2].value, static_cast<std::uint16_t>(arr / 2))
-    << "50% duty should be half the period";
+  hat.set_duty_cycle(13, 100.0f);
+  hat.set_duty_cycle(13, 0.0f);
+
+  const auto writes = decode(bus);
+  ASSERT_EQ(writes.size(), 2u);
+  EXPECT_EQ(writes[0].value, arr + 1) << "100% needs CCR = ARR + 1, not ARR";
+  EXPECT_EQ(writes[1].value, 0u);
 }
 
 TEST(Hat, DutyCycleClampsToTheClosedRangeZeroToOneHundred)
 {
-  TempI2cFile wire;
-  picar_hw::Hat hat(wire.path(), kAddr, 13);
-  hat.set_frequency(50);
-  hat.set_duty_cycle(250.0f);
-  hat.set_duty_cycle(-40.0f);
+  FakeI2cBus bus;
+  picar_hw::Hat hat(bus, 50);
+  const std::uint16_t arr = decode(bus)[2 * 3 + 1].value;
+  bus.writes.clear();
 
-  const auto writes = decode(wire.bytes());
-  ASSERT_EQ(writes.size(), 4u);
-  EXPECT_EQ(writes[2].value, writes[1].value) << "over 100% should saturate at full period";
-  EXPECT_EQ(writes[3].value, 0u) << "negative should saturate at zero";
+  hat.set_duty_cycle(13, 250.0f);
+  hat.set_duty_cycle(13, -40.0f);
+
+  const auto writes = decode(bus);
+  ASSERT_EQ(writes.size(), 2u);
+  EXPECT_EQ(writes[0].value, arr + 1) << "over 100% should saturate at the full period";
+  EXPECT_EQ(writes[1].value, 0u) << "negative should saturate at zero";
+}
+
+TEST(Hat, DutyCycleUsesItsOwnTimersPeriod)
+{
+  FakeI2cBus bus;
+  picar_hw::Hat hat(bus, 50);
+  hat.set_frequency(3, 20000);            // 72 MHz / 20 kHz = 3600 counts, PSC 0
+  bus.writes.clear();
+
+  hat.set_duty_cycle(13, 50.0f);          // timer 3
+  hat.set_duty_cycle(8, 50.0f);           // timer 2, still 50 Hz
+
+  const auto writes = decode(bus);
+  ASSERT_EQ(writes.size(), 2u);
+  EXPECT_EQ(writes[0].value, 1800u);
+  EXPECT_EQ(writes[1].value, 32727u) << "half of timer 2's 65454 counts";
+}
+
+TEST(Hat, ChannelsSharingATimerSeeItsNewPeriod)
+{
+  // Channels 12 and 13 share timer 3. Changing its frequency must change the
+  // scale of both: neither may keep a stale copy of the old period.
+  FakeI2cBus bus;
+  picar_hw::Hat hat(bus, 50);
+  hat.set_frequency(3, 200);
+  bus.writes.clear();
+
+  hat.set_duty_cycle(12, 50.0f);
+  hat.set_duty_cycle(13, 50.0f);
+
+  const auto writes = decode(bus);
+  ASSERT_EQ(writes.size(), 2u);
+  EXPECT_EQ(writes[0].value, writes[1].value);
+  EXPECT_EQ(writes[0].value, 30000u) << "half of 60000 counts at 200 Hz";
+}
+
+TEST(Hat, ChannelOnNoTimerThrows)
+{
+  FakeI2cBus bus;
+  picar_hw::Hat hat(bus, 50);
+  EXPECT_THROW(
+    hat.set_duty_cycle(hw::kTimerCount * hw::kChannelsPerTimer, 50.0f),
+    std::out_of_range);
 }
 
 // --- characterisation: locks current behaviour, not derived from physics -----
 
-TEST(Hat, GoldenBytesForFiftyHertzOnChannelThirteen)
+TEST(Hat, GoldenRegistersForFiftyHertz)
 {
-  TempI2cFile wire;
-  picar_hw::Hat hat(wire.path(), kAddr, 13);
-  hat.set_frequency(50);
+  FakeI2cBus bus;
+  picar_hw::Hat hat(bus, 50);
 
-  // PSC=1195, ARR=1205 -> written as n-1: 1194 (0x04AA), 1204 (0x04B4).
-  // 72e6 / (1195 * 1205) = 50.001 Hz.
-  const std::vector<RegWrite> expected{{0x43, 1194}, {0x47, 1204}};
-  EXPECT_EQ(decode(wire.bytes()), expected);
+  // ticks = 72e6 / 50 = 1440000; PSC = 1440000 / 65536 = 21;
+  // period = 1440000 / 22 = 65454 counts, written as ARR = 65453.
+  // 72e6 / (22 * 65454) = 50.0004 Hz.
+  const auto writes = decode(bus);
+  ASSERT_GE(writes.size(), 2u);
+  const std::vector<RegWrite> expected{{0x40, 21}, {0x44, 65453}};
+  EXPECT_EQ(std::vector<RegWrite>(writes.begin(), writes.begin() + 2), expected);
 }
 
-// --- the shared-timer coupling, documented as a test ------------------------
+// --- the real bus -------------------------------------------------------------
 
-TEST(Hat, ChannelsSharingATimerWriteTheSamePrescalerRegister)
+TEST(LinuxI2cBus, MissingAdapterThrows)
 {
-  TempI2cFile wire_a;
-  TempI2cFile wire_b;
-  picar_hw::Hat left_front(wire_a.path(), kAddr, 13);
-  picar_hw::Hat right_front(wire_b.path(), kAddr, 12);
-
-  left_front.set_frequency(50);
-  right_front.set_frequency(200);
-
-  const auto a = decode(wire_a.bytes());
-  const auto b = decode(wire_b.bytes());
-  ASSERT_EQ(a.size(), 2u);
-  ASSERT_EQ(b.size(), 2u);
-
-  EXPECT_EQ(a[0].reg, b[0].reg) << "channels 13 and 12 share timer 3's prescaler";
-  EXPECT_NE(a[0].value, b[0].value)
-    << "so the second call silently changes the first channel's frequency";
+  EXPECT_THROW(picar_hw::LinuxI2cBus(255, hw::kDefaultAddress), std::system_error);
 }

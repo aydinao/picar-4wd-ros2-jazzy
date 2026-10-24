@@ -15,13 +15,16 @@ namespace picar_hw
 class Motor
 {
 public:
-  /// @param pwm         the wheel's PWM channel; must outlive this Motor
+  /// @param hat         the HAT driving the wheel; must outlive this Motor
+  /// @param channel     the wheel's PWM channel on the HAT
   /// @param chip_path   GPIO character device, e.g. /dev/gpiochip0
   /// @param dir_line    BCM line number of the direction pin
   /// @param is_reversed invert the direction line (mirrored mounting)
   Motor(
-    Hat & pwm, const std::string & chip_path, unsigned int dir_line,
+    Hat & hat, std::uint8_t channel, const std::string & chip_path, unsigned int dir_line,
     bool is_reversed = false);
+
+  /// Sets the duty to zero. Never throws: a failed write is reported on stderr.
   ~Motor();
 
   // Owns a GPIO line request; a copy would release it twice.
@@ -30,14 +33,15 @@ public:
   Motor(Motor &&) = delete;
   Motor & operator=(Motor &&) = delete;
 
-  /// -100..100; the sign selects direction.
+  /// -100..100; the sign selects direction. Throws if the I2C write fails.
   void set_power(int8_t power);
 
   /// True if the direction line was successfully claimed.
   bool ok() const {return dir_request_ != nullptr;}
 
 private:
-  Hat & pwm_;
+  Hat & hat_;
+  std::uint8_t channel_;
   unsigned int dir_line_;
   bool is_reversed_;
 

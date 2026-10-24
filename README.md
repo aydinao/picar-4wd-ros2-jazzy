@@ -72,8 +72,11 @@ the Python); there is no public schematic.
 
 - **MCU:** STM32F103 at I2C `0x14`. Its firmware exposes `TIMx->PSC/ARR/CCRy`,
   so `f = 72 MHz / ((PSC+1)(ARR+1))` (RM0008).
-- **Timers are shared:** channels 12/13 are one timer, 8/9 another. Setting
-  one wheel's frequency changes its sibling's.
+- **Timers are shared:** channels 12/13 are one timer, 8/9 another, so PWM
+  frequency belongs to a timer, not a wheel. `picar_hw::Hat` sets it per timer.
+- **Motor drivers:** two TC1508S dual H-bridges (two inputs per motor: coast,
+  forward, reverse, brake). The datasheet gives no PWM limit; `Hat` caps the
+  frequency at 20 kHz.
 - **Drive:** skid-steer, not Ackermann. Four motors → four joints, two per side
   for `diff_drive_controller`.
 - **Encoders:** two, 20 slots, single channel (magnitude only). BCM 25 = left,

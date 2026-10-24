@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <exception>
 
 namespace picar_hw
 {
@@ -15,9 +16,9 @@ constexpr const char * kConsumer = "picar_hw";
 }
 
 Motor::Motor(
-  Hat & pwm, const std::string & chip_path, unsigned int dir_line,
+  Hat & hat, std::uint8_t channel, const std::string & chip_path, unsigned int dir_line,
   bool is_reversed)
-: pwm_(pwm), dir_line_(dir_line), is_reversed_(is_reversed)
+: hat_(hat), channel_(channel), dir_line_(dir_line), is_reversed_(is_reversed)
 {
   chip_ = gpiod_chip_open(chip_path.c_str());
   if (!chip_) {
@@ -56,7 +57,14 @@ Motor::Motor(
 
 Motor::~Motor()
 {
-  pwm_.set_duty_cycle(0.0f);
+  // A destructor is noexcept: an exception escaping it calls std::terminate.
+  try {
+    hat_.set_duty_cycle(channel_, 0.0f);
+  } catch (const std::exception & e) {
+    std::fprintf(
+      stderr, "Motor: could not stop channel %u: %s\n",
+      static_cast<unsigned>(channel_), e.what());
+  }
   if (dir_request_) {gpiod_line_request_release(dir_request_);}
   if (chip_) {gpiod_chip_close(chip_);}
 }
@@ -81,7 +89,7 @@ void Motor::set_power(int8_t power)
       dir_request_, dir_line_,
       direction ? GPIOD_LINE_VALUE_ACTIVE : GPIOD_LINE_VALUE_INACTIVE);
   }
-  pwm_.set_duty_cycle(static_cast<float>(abs_power));
+  hat_.set_duty_cycle(channel_, static_cast<float>(abs_power));
 }
 
 }  // namespace picar_hw

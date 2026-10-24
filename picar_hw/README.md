@@ -8,7 +8,8 @@ libgpiod v2 only. Wiring, bring-up and chip facts are in the
 
 ```
 include/picar_hw/
-  hat.hpp             PWM over the HAT's I2C registers
+  i2c_bus.hpp         I2cBus interface; LinuxI2cBus over /dev/i2c-N
+  hat.hpp             the HAT's PWM: frequency per timer, duty per channel
   hat_registers.hpp   chip constants (register map, clock, timers)
   motor.hpp           one wheel: duty cycle + direction GPIO
   encoder.hpp         rising-edge counter on a background thread
@@ -16,7 +17,9 @@ include/picar_hw/
 tools/
   twitch.cpp          drive one wheel:  twitch <channel> <dir_gpio> <power -100..100> <s>
   encoder_probe.cpp   print both encoder counts once a second
-test/test_hat.cpp     byte-level register tests
+test/
+  test_hat.cpp        byte-level register tests
+  fake_i2c_bus.hpp    I2cBus that records writes instead of sending them
 ```
 
 ## Boundary
@@ -27,15 +30,12 @@ Wiring arrives as constructor arguments.
 
 ## Tests
 
-The tests assert on the bytes written to the wire. `Hat` is pointed at a temp
-file instead of `/dev/i2c-1`: `ioctl(I2C_SLAVE)` fails but `write()` still
-lands.
+The tests assert on the bytes written to the wire. `Hat` takes an `I2cBus &`;
+the tests hand it a `FakeI2cBus` that records each write, so no I2C hardware is
+needed.
 
 | Kind | Asserts |
 |---|---|
-| addressing | channel 13 writes timer 3's PSC/ARR (`0x43`/`0x47`) |
-| contract | emitted registers decode to the requested frequency within 1% |
-| characterisation | golden bytes for 50 Hz (regression lock only) |
-
-Each test needs a unique temp filename (`mkstemp`): I2CPP caches fds by
-filename in a global singleton, so a reused path returns a stale fd.
+| addressing | timer 3's PSC/ARR are `0x43`/`0x47`; channel 13's compare register is `0x2D` |
+| contract | emitted registers decode to the requested frequency within 0.1%; PSC is the smallest that fits; 100% duty is CCR = ARR + 1 |
+| characterisation | golden registers for 50 Hz (regression lock only) |
